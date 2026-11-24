@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14101c">
+<meta name="description" content="Forja da Brasa — transforme treino, aeróbico, estudo e alimentação em uma aventura 8-bit de D&D do nível 1 ao 20.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Forja da Brasa">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css">
+<title>Forja da Brasa</title>
+</head>
+<body>
+<div id="app">
+  <header id="hud" aria-label="Status do herói"></header>
+  <main id="jogo">
+    <div id="vista">
+      <canvas id="tela" width="240" height="176" aria-label="Mapa do jogo"></canvas>
+      <div id="bt" class="oculto">
+        <div id="bt-m" class="bt-caixa"></div>
+        <div id="bt-h" class="bt-caixa"></div>
+        <div id="bt-log" aria-live="polite"></div>
+      </div>
+    </div>
+    <div id="toast" class="oculto" role="status"></div>
+  </main>
+  <section id="controles">
+    <div class="dpad" aria-label="Direções">
+      <button data-dir="cima" class="d-cima" aria-label="Cima">▲</button>
+      <button data-dir="esq" class="d-esq" aria-label="Esquerda">◀</button>
+      <button data-dir="dir" class="d-dir" aria-label="Direita">▶</button>
+      <button data-dir="baixo" class="d-baixo" aria-label="Baixo">▼</button>
+    </div>
+    <div class="meio"><button id="btn-menu" class="btn-menu">MENU</button><span class="dica-tec">Setas/WASD · Z/Enter = A · X/Esc = B · M = Menu</span></div>
+    <div class="botoes"><button id="btn-b" aria-label="B">B</button><button id="btn-a" aria-label="A">A</button></div>
+    <div id="bt-menu"></div>
+  </section>
+</div>
+
+<div id="painel" class="oculto" role="dialog" aria-modal="true">
+  <div class="painel-caixa">
+    <div class="painel-topo"><h2 id="painel-titulo"></h2><button class="fechar" data-act="fechar" aria-label="Fechar">✕</button></div>
+    <div id="painel-corpo"></div>
+  </div>
+</div>
+
+<div id="dialogo" class="oculto" role="dialog">
+  <div class="dialogo-caixa"><div class="dialogo-nome"></div><div class="dialogo-txt"></div><div class="dialogo-seta">▼</div></div>
+</div>
+
+<div id="popup" class="oculto" role="dialog" aria-modal="true"><div class="popup-caixa"></div></div>
+
+<div id="titulo">
+  <div class="titulo-logo"><div class="titulo-brasa">🔥</div><h1>FORJA<br>DA BRASA</h1><p>Cada série, cada passo, cada página e cada refeição acendem a Brasa.</p></div>
+  <div class="titulo-menu" id="titulo-menu"></div>
+  <div class="titulo-rodape">Aventura 8-bit · D&amp;D 5e (SRD) · Nível 1 a 20</div>
+</div>
+
+<noscript><p style="color:#fff;padding:2rem">Este jogo precisa de JavaScript habilitado.</p></noscript>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

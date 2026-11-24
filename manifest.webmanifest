@@ -1,0 +1,17 @@
+{
+  "name": "Forja da Brasa",
+  "short_name": "Forja",
+  "description": "Gamifique treino, aeróbico, estudo e alimentação em uma aventura 8-bit de D&D do nível 1 ao 20.",
+  "lang": "pt-BR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14101c",
+  "theme_color": "#14101c",
+  "categories": ["games", "health", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
