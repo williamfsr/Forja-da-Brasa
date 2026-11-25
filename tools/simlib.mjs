@@ -2,7 +2,6 @@
 import * as St from '../js/store.js';
 import * as R from '../js/rules.js';
 import { recursosMax } from '../js/srd.js';
-import { simular } from '../js/combat.js';
 
 export function setP(s, p) {
   for (const id of ['supino', 'terra', 'agachamento', 'barra_fixa', 'remada', 'lateral']) {
@@ -27,14 +26,6 @@ export function heroiSim(cls, L, p) {
   s.recursosMax = recursosMax(cls, L); s.recursos = JSON.parse(JSON.stringify(s.recursosMax));
   const pot = L >= 15 ? 'pocao4' : L >= 9 ? 'pocao3' : L >= 4 ? 'pocao2' : 'pocao1'; s.inv = [{ id: pot, n: 2 }];
   s.heroi.hp = R.derivar(s).hpMax; return s;
-}
-export function lutar(cls, L, mon, n = 200, extra = {}) {
-  let vit = 0, hpPerd = 0;
-  for (let i = 0; i < n; i++) {
-    const s = heroiSim(cls, L, extra.p); const m = R.criarMonstro(mon.id, mon.opts || {}); const rng = R.mulberry32(1000 + i);
-    const B = simular(s, m, rng); if (B.fim === 'vitoria') vit++; hpPerd += (1 - Math.max(0, B.h.hp) / B.h.hpMax);
-  }
-  return { win: vit / n, hp: hpPerd / n };
 }
 export function criaBoss(cap) { const b = cap.boss; return { id: b.base, opts: { chefe: true, ov: { ...(b.ov || {}), dm: b.dm || 1 }, nome: b.nome, esc: b.esc } }; }
 
