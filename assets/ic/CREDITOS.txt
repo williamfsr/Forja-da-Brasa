@@ -1,0 +1,161 @@
+Ícones © seus autores, copiados do sistema dnd5e para Foundry VTT (MIT; ícones sob as licenças abaixo).
+CC BY 3.0: https://creativecommons.org/licenses/by/3.0/ — game-icons.net e The Noun Project.
+
+abilities/charisma: "Eagle" by Minh Do from https://thenounproject.com/icon/eagle-6257667/
+abilities/constitution: "Bear" by CC0hort from https://thenounproject.com/icon/bear-6278192/
+abilities/dexterity: "Cat" by styleaaa from https://thenounproject.com/icon/cat-5839760/
+abilities/intelligence: "Fox" by Maxim Kulikov from https://thenounproject.com/icon/fox-6431555/
+abilities/strength: "bull" by Maxim Kulikov from https://thenounproject.com/icon/bull-6431581/
+abilities/wisdom: "Owl" by Brad https://thenounproject.com/icon/owl-6336446/
+ability-score-improvement: "Weight lifting" by Delapouite under CC BY 3.0
+action/attack: "Sword wound" by Lorc under CC BY 3.0
+action/command: "Sonic shout" by Lorc under CC BY 3.0
+action/dash: "Sprint" by Lorc under CC BY 3.0
+action/disarm: "Drop weapon" by Skoll under CC BY 3.0
+action/disengage: "Dodging" by Lorc under CC BY 3.0
+action/enlarge: "Expand" by Delapouite under CC BY 3.0
+action/help: "Slap" by Lorc under CC BY 3.0
+action/hide: "Hidden icon" by Lorc under CC BY 3.0
+action/influence: "Convince" by Delapouite under CC BY 3.0
+action/magic: "Magic swirl" by Lorc under CC BY 3.0
+action/move: "Journey" by Lorc under CC BY 3.0
+action/opportunity-attack: "Blade drag" by Lorc under CC BY 3.0
+action/pull: "Pull" by Delapouite under CC BY 3.0
+action/push: "Push" by Delapouite under CC BY 3.0
+action/reaction: "Rapid sharing arrow" by Lorc under CC BY 3.0
+action/ready: "Sands of time" by Lorc under CC BY 3.0
+action/reduce-damage: "Divert" by Lorc under CC BY 3.0
+action/reduce: "Contract" by Delapouite under CC BY 3.0
+action/reroll: "Rolling dice cup" by Delapouite under CC BY 3.0
+action/restore-use: "Orb direction" by Lorc under CC BY 3.0
+action/roll-bonus: "Perspective dice 6" by Delapouite under CC BY 3.0 (modified)
+action/roll-penalty: "Perspective dice 6" by Delapouite under CC BY 3.0 (modified)
+action/search: "Crow's nest" by Delapouite under CC BY 3.0
+action/study: "Read" by Skoll under CC BY 3.0
+action/swap: "Back and forth" by Lorc under CC BY 3.0
+action/trip: "Tripwire" by Lorc under CC BY 3.0
+action/utilize: "Button finger" by Delapouite under CC BY 3.0
+active-effects/enchantment: "Rune sword" by Lorc under CC BY 3.0 & "Magic axe" by Delapouite under CC BY 3.0
+active-effects/standard: "Embraced energy" by Lorc under CC BY 3.0
+activity/attack: "Sword clash" by Lorc under CC BY 3.0
+activity/cast: "Orb wand" by Willdabeast under CC BY 3.0 & "Fairy wand" by Lorc under CC BY 3.0
+activity/check: "Juggler" by Lorc under CC BY 3.0
+activity/damage: "Earth spit" by Lorc under CC BY 3.0
+activity/enchant: "Rune sword" by Lorc under CC BY 3.0 & "Magic axe" by Delapouite under CC BY 3.0
+activity/forward: "Tron arrow" by Lorc under CC BY 3.0
+activity/heal: "Health increase" by sbed under CC BY 3.0
+activity/order: "Pointing" by Lord under CC BY 3.0
+activity/save: "Shield reflect" by Lorc under CC BY 3.0
+activity/summon: "Pentagram rose" by Lorc under CC BY 3.0
+activity/teleport: "Teleport" by Lorc under CC BY 3.0
+activity/transform: "Frog prince" by Delapouite under CC BY 3.0
+activity/utility: "Spanner" by Lorc under CC BY 3.0
+actors/character: "adventurer female" by Maxicons from https://thenounproject.com/icon/adventurer-female-4016867/
+actors/encounter: "Sverd I Fjell" by Delapouite under CC BY 3.0
+actors/faction: "Crenulated shield" by Lorc under CC BY 3.0
+actors/group: "Tattered banner" by Lorc under CC BY 3.0
+actors/npc: "Spiked dragon head" by Delapouite under CC BY 3.0
+actors/vehicle: "Ship's wheel" by Delapouite under CC BY 3.0
+advancement/modify-item: "Anvil impact" by Lorc under CC BY 3.0
+backpack: "Light backpack" by Delapouite under CC BY 3.0
+behaviors/antimagic: "Magic swirl" by Lorc under CC BY 3.0
+behaviors/apply-active-effect: "Aura" by Lorc under CC BY 3.0
+behaviors/difficult-terrain: "Falling rocks" by Delapouite under CC BY 3.0
+checked-shield: "Checked Shield" by Lorc under CC BY 3.0
+damage/acid: "Fizzling flask" by Lorc under CC BY 3.0
+damage/all: "Triple plier" by Lorc under CC BY 3.0
+damage/bludgeoning: "Claw hammer" by Lorc under CC BY 3.0
+damage/cold: "Frozen orb" by Lorc under CC BY 3.0
+damage/fire: "Flamer" by sbed under CC BY 3.0
+damage/force: "Ringed beam" by Lorc under CC BY 3.0
+damage/healing: "Caduceus" by Delapouite under CC BY 3.0
+damage/lightning: "Lightning helix" by Lorc under CC BY 3.0
+damage/maxhp: "Cheerful" by Lorc under CC BY 3.0
+damage/necrotic: "Burning skull" by Skoll under CC BY 3.0
+damage/piercing: "Supersonic bullet" by Lorc under CC BY 3.0
+damage/psychic: "Psychic waves" by Lorc under CC BY 3.0
+damage/radiant: "Eclipse flair" by Lorc under CC BY 3.0
+damage/slashing: "Wind slap" by Lorc under CC BY 3.0
+damage/temphp: "Eternal love" by Delapouite under CC BY 3.0
+damage/threshold: "Shield bounces" by Lorc under CC BY 3.0
+damage/thunder: "Tornado discs" by Lorc under CC BY 3.0
+facilities/build: "Concrete bag" by Delapouite under CC BY 3.0
+facilities/change: "Cycle" by Lorc under CC BY 3.0
+facilities/craft: "Anvil" by Lorc under CC BY 3.0
+facilities/empower: "Pentacle" by Skoll under CC BY 3.0
+facilities/enlarge: "Upgrade" by Delapouite under CC BY 3.0
+facilities/harvest: "Sickle" by Delapouite under CC BY 3.0
+facilities/maintain: "Flat Hammer" by Lorc under CC BY 3.0
+facilities/recruit: "Black Knight Helm" by Delapouite under CC BY 3.0
+facilities/research: "Enlightenment" by Lorc under CC BY 3.0
+facilities/trade: "Cash" by Lorc under CC BY 3.0
+hit-points: "Heart plus" by Zeromancer under CC0 PDD
+ink-pot: "ink pot" by Creative Stall from https://thenounproject.com/icon/ink-pot-143149/
+item-choice: "Choice" by Delapouite under CC BY 3.0
+item-grant: "White book" by Willdabeast under CC BY 3.0
+items/background: "Trail" by Delapouite under CC BY 3.0
+items/class: "Warlord helmet" by Caro Asercion under CC BY 3.0
+items/consumable: "Round potion" by Caro Asercion under CC BY 3.0
+items/container: "Backpack" by Delapouite under CC BY 3.0
+items/equipment: "Lamellar" by Lorc under CC BY 3.0
+items/facility: "Stone tower" by Lorc under CC BY 3.0
+items/feature: "Round star" by Delapouite under CC BY 3.0
+items/loot: "Open treasure chest" by Skoll under CC BY 3.0
+items/race: "Dwarf face" by Delapouite under CC BY 3.0
+items/renown: "Laurels" by Lorc under CC BY 3.0
+items/spell: "Pentacle" by Skoll under CC BY 3.0
+items/subclass: "Elf helmet" by Kier Heyl under CC BY 3.0
+items/tool: "Stone crafting" by Lorc under CC BY 3.0
+items/weapon: "Crossed sabers" by Lorc under CC BY 3.0
+monster: "Spiked dragon head" by Delapouite under CC BY 3.0
+mouse: "Mouse" by difatama from https://thenounproject.com/icon/mouse-6099417/
+movement/burrow: "Mole" by Caro Asercion under CC BY 3.0
+movement/climb: "Mountain climbing" by Caro Asercion under CC BY 3.0
+movement/crawl: "Half body crawling" by Delapouite under CC BY 3.0
+movement/fly: "Harpy" by Lorc under CC BY 3.0
+movement/jump: "Jump across" by Delapouite under CC BY 3.0
+movement/swim: "Whale tail" by Delapouite under CC BY 3.0
+movement/walk: "Walking boot" by Lorc under CC BY 3.0
+original-class: "Barbute" by Lorc under CC BY 3.0
+properties/magical: "Sparkling sabre icon" by Lorc under CC BY 3.0
+rosa-shield: "Rosa shield" by Lorc under CC BY 3.0
+scale-value: "Dice target" by Delapouite under CC BY 3.0
+size: "Body height" by Delapouite under CC BY 3.0
+statuses/antimagic: "Magic swirl" by Lorc under CC BY 3.0
+statuses/bloodied: "Blood" by Skoll under CC BY 3.0
+statuses/burning: "Flamer" by sbed under CC BY 3.0
+statuses/burrowing: "Spade" by Lorc under CC BY 3.0
+statuses/cover-half: "Shield" by sbed under CC BY 3.0
+statuses/cover-three-quarters: "Shield" by sbed under CC BY 3.0
+statuses/cover-total: "Shield" by sbed under CC BY 3.0
+statuses/cursed: "Ubisoft sun" by Lorc under CC BY 3.0
+statuses/dehydration: "Waterskin" by Delapouite under CC BY 3.0
+statuses/diseased: "Biohazard" by Lorc under CC BY 3.0
+statuses/encumbered: "Weight" by YANDI RS from https://thenounproject.com/icon/weight-4551693/
+statuses/ethereal: "Ghost ally" by Lorc under CC BY 3.0
+statuses/exceeding-carrying-capacity: "Weight" by YANDI RS from https://thenounproject.com/icon/weight-4551693/
+statuses/falling: "Falling boulder" by Lorc under CC BY 3.0
+statuses/flying: "Feathered wing" by Lorc under CC BY 3.0
+statuses/heavily-encumbered: "Weight" by YANDI RS from https://thenounproject.com/icon/weight-4551693/
+statuses/hiding: "Hidden" by Lorc under CC BY 3.0
+statuses/hovering: "Wingfoot" by Lorc under CC BY 3.0
+statuses/malnutrition: "Bowl of rice" by Caro Asercion under CC BY 3.0
+statuses/no-opportunity-attacks: "Blade drag" by Lorc under CC BY 3.0
+statuses/no-reactions: "Rapid sharing arrow" by Lorc under CC BY 3.0
+statuses/sleeping: "Night sleep" by Delapouite under CC BY 3.0
+statuses/stable: "Bandage roll" by Lorc under CC BY 3.0
+statuses/suffocation: "Lungs" by Delapouite under CC BY 3.0
+statuses/transformed: "Flat paw print" by Lorc under CC BY 3.0
+subclass: "Elf helmet" by Kier Heyl under CC BY 3.0
+trait-armor-proficiencies: "Leather armor" by Delapouite under CC BY 3.0
+trait-condition-immunities: "Frozen body" by Delapouite under CC BY 3.0
+trait-damage-immunities: "Aura" by Lorc under CC BY 3.0
+trait-damage-resistances: "Surrounded shield" by Lorc under CC BY 3.0
+trait-damage-vulnerabilities: "Arm bandage" by Delapouite under CC BY 3.0
+trait-languages: "Wax tablet" by Delapouite under CC BY 3.0
+trait-saves: "Dodging" by Lorc under CC BY 3.0
+trait-skills: "Juggler" by Lorc under CC BY 3.0
+trait-tool-proficiencies: "Swiss army knife" by Delapouite under CC BY 3.0
+trait-weapon-proficiencies: "Crossed swords" by Lorc under CC BY 3.0
+trait: "Scroll unfurled" by Lorc under CC BY 3.0
+versatile: "Swiss army knife" by Delapouite under CC BY 3.0
