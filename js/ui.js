@@ -9,6 +9,8 @@ import { $, esc, fmt, val, valNum, toast, popup, popupAtualizar, registrar, abri
 import { S, tierTag, descItem, nomeItem, icoItem } from './uiutil.js';
 import './paineis1.js';
 import './paineis2.js';
+import './pausa.js'; import './loja.js';
+import './diario.js';
 import './paineis3.js';
 import './paineis4.js';
 import './habitos.js';
@@ -16,6 +18,7 @@ import './grimorio.js';
 import { G } from './game.js';
 import * as Au from './audio.js';
 import { montarEditor } from './criador.js';
+import { instalarMinimapa } from './minimapa.js';
 import { apPadrao, CORES_CLASSE } from './cosmeticos.js';
 import { retrato } from './pessoa.js';
 import { visDe } from './render.js';
@@ -24,7 +27,7 @@ B.definirHeroiCena(() => { const s = St.S; return s ? retrato(s.heroi.ap, visDe(
 // ======================= HUD =======================
 const mini = (v, max, cls) => `<span class="mini ${cls}">${Array.from({ length: max }, (_, i) => `<b class="${i < v ? 'on' : ''}"></b>`).join('')}</span>`;
 export function hud() {
-  const s = St.S; const el = $('#hud'); if (!s) { el.innerHTML = ''; return; }
+  const s = St.S; const el = $('#hud'); if (!s) { el.innerHTML = ''; return; } St.garantirRastro();
   const d = St.der(), pn = R.progressoNivel(s.heroi.xp), H = s.historia, h = s.heroi, cls = CLASSES[h.cls];
   const xpTxt = pn.lendario ? `LENDÁRIO ${pn.rank}` : `${fmt(pn.atual)}/${fmt(pn.falta)} XP`;
   el.innerHTML = `<div class="l1"><span class="nv">NV ${h.nivel}</span><span class="id">${cls.emoji} ${esc(h.nome)}</span><div class="barra xp"><i style="width:${(pn.pct * 100).toFixed(1)}%"></i><span>${xpTxt}</span></div><span class="chip" title="Ouro">🪙 ${fmt(h.ouro)}</span><span class="chip" title="Tochas">🕯️ ${h.tochas}</span></div>
@@ -172,6 +175,7 @@ export function instalarUi() {
     dialogoAberto: B.dialogoAberto, dialogoAvancar: B.dialogoAvancar, dialogoNavegar: B.dialogoNavegar, fechar: () => { if (B.painelAberto()) fecharPainel(); }, painel: abrirPainel, toast, dialogo: B.dialogo, dialogoEscolha: B.dialogoEscolha,
     confirmar, tentarCapitulo, fimCapitulo, fimDeJogo, hud, drenar,
   };
+  instalarMinimapa(G);
   St.bus.on('mudou', hud); St.bus.on('popup', () => setTimeout(drenar, 30)); setInterval(drenar, 400); setInterval(tick, 1000);
   document.addEventListener('keydown', (e) => {
     if ((e.key === 'Enter' || e.key === ' ') && B.popupAberto()) { const b = document.querySelector('#popup .btn.pri[data-res]') || document.querySelector('#popup [data-res]'); if (b) { e.preventDefault(); b.click(); } }

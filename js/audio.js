@@ -59,6 +59,8 @@ const SONS = {
   porta: (t) => { nota(N(55), t, 0.08, 'square', 0.25); nota(N(62), t + 0.08, 0.1, 'square', 0.25); },
   tocha: (t) => { ruido(t, 0.25, 0.25, 3000); },
   trovao: (t) => rumor(t, 2.6, 0.9, 420),
+  folha: (t) => { ruido(t, 0.16, 0.3, 2400); ruido(t + 0.11, 0.2, 0.24, 3400); ruido(t + 0.26, 0.12, 0.16, 1800); },
+  livro: (t) => { ruido(t, 0.12, 0.35, 450); ruido(t + 0.1, 0.18, 0.25, 2200); },
   inercia: (t) => [48, 47, 46, 44].forEach((n, i) => nota(N(n), t + i * 0.18, 0.3, 'sawtooth', 0.25)),
 };
 export function sfx(nome) { if (!ligado || !iniciar()) return; const f = SONS[nome]; if (f) f(ctx.currentTime + 0.01); }

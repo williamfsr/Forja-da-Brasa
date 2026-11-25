@@ -305,3 +305,6 @@ html, body { overflow: hidden; }
 @keyframes dadoTrem { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 /* v6: o registro do combate deixa o canto direito livre para os dados pequenos */
 @media (max-width: 520px) { #bt-log { max-width: 47vw; } }
+/* v7: aviso do zoom */
+#zoomtag { position: absolute; left: 50%; top: calc(58px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 9; padding: 4px 12px; border-radius: 14px; background: rgba(8,6,16,.72); border: 1px solid rgba(255,255,255,.18); color: #ffe9b0; font: 700 13px var(--sans); opacity: 0; pointer-events: none; transition: opacity .25s; }
+#zoomtag.on { opacity: 1; }

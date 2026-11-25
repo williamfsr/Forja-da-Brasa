@@ -41,11 +41,12 @@ const AJ_DC = { frio: 3, fanatico: 3, honrado: 2, arrogante: 1, agressivo: 1, ga
 // ---- afinidade, inimizade ----
 export function mudarAfin(G, id, d) {
   const r = rel(id); const antes = r.afin; r.afin = Math.max(-10, Math.min(12, r.afin + d));
+  if (d >= 1) St.memorizar(id, 'A amizade de vocês cresceu.'); else if (d <= -1) St.memorizar(id, 'Houve atrito entre vocês.');
   if (!IMUNES.has(id) && antes > -5 && r.afin <= -5 && !(r.ini > 0)) iniciarInimizade(G, id, 1);
   St.salvar(); return r.afin;
 }
 export function iniciarInimizade(G, id, n = 1) {
-  const r = rel(id), H = S().historia; r.ini = Math.max(r.ini | 0, n); r.afin = Math.min(r.afin, -5); r.rom = 0; if (H.par && H.par.id === id) H.par = null;
+  const r = rel(id), H = S().historia; r.ini = Math.max(r.ini | 0, n); St.memorizar(id, 'Virou seu inimigo: algo se quebrou entre vocês.'); r.afin = Math.min(r.afin, -5); r.rom = 0; if (H.par && H.par.id === id) H.par = null;
   const v = (H.vistos.rom ||= {}); v.inimigos = (v.inimigos | 0) + 1; St.salvar(); Au.sfx('hurt');
   if (G && G.ui) G.ui.toast(`⚔️ ${nomeDe(id)} agora é seu inimigo. Barra de inimizade ${r.ini}/10.`, 4200);
 }
@@ -111,18 +112,18 @@ export async function trairA(G, alvo) {
   St.salvar(); G.ui.hud();
 }
 async function pedirNamoro(G, id, ret, nome) {
-  const s = S(), H = s.historia, r = rel(id); H.par = { id, tipo: 'namoro', desde: St.hoje() }; H.moral = Math.min(100, H.moral + 5); s.heroi.insp = Math.min(3, (s.heroi.insp || 0) + 1); Au.sfx('pr');
+  const s = S(), H = s.historia, r = rel(id); H.par = { id, tipo: 'namoro', desde: St.hoje() }; St.memorizar(id, 'Vocês começaram a namorar.'); H.moral = Math.min(100, H.moral + 5); s.heroi.insp = Math.min(3, (s.heroi.insp || 0) + 1); Au.sfx('pr');
   await di(G, nome, ret, ['» Eu queria te perguntar uma coisa. Você... aceita ficar comigo?', '* O silêncio dura um segundo longo demais.', pick(['Eu estava esperando você perguntar. Sim.', 'Sim. Sim, claro que sim.', 'Eu aceito. Mas vou cobrar: treinar junto, todo dia que der.']), `* 💞 Você e ${nomeDe(id)} estão namorando. Moral +5 · +1 Inspiração.`, '* Dica: o romance sobe até 15 para o casamento. Cuidado com quem você flerta: o Vale tem boca.']);
   G.ui.hud(); r.rom = Math.max(10, r.rom);
 }
 async function casar(G, id, ret, nome, custo) {
-  const s = S(), H = s.historia, r = rel(id); s.heroi.ouro -= custo; H.par = { ...H.par, tipo: 'casado', desde: St.hoje() }; r.rom = 15; H.moral = Math.min(100, H.moral + 8); H.flags.casado = true; St.invAdd('alianca', 1); Au.sfx('win');
+  const s = S(), H = s.historia, r = rel(id); s.heroi.ouro -= custo; H.par = { ...H.par, tipo: 'casado', desde: St.hoje() }; St.memorizar(id, 'Vocês se casaram, com a vila toda de testemunha.'); r.rom = 15; H.moral = Math.min(100, H.moral + 8); H.flags.casado = true; St.invAdd('alianca', 1); Au.sfx('win');
   await di(G, nome, ret, ['» Eu não sei fazer discursos. Mas fica comigo?', '* A taverna toda aplaude. Tavi chora no avental. Mestre Ferrão finge que é poeira.', 'Sim. Todos os dias que o Vale me deixar.', `* 💍 Você e ${nomeDe(id)} se casaram. Moral +8 · Aliança de Brasa (+8 PV máx. quando equipada).`, '* A partir de agora, essa pessoa mora na sua casa, e a Inércia vai ter de passar por ela primeiro.']);
   G.ui.hud();
 }
 async function terminar(G, id, ret, nome) {
   const op = await G.ui.dialogoEscolha({ nome, retrato: ret, texto: 'Isso vai doer nos dois. Tem certeza?', opcoes: [{ id: 's', rot: 'Sim. Acabou.', tom: 'Ruptura' }, { id: 'n', rot: 'Não. Esqueça o que eu disse.' }] }); if (op !== 's') return;
-  const s = S(), H = s.historia, r = rel(id); H.par = null; r.rom = 0; r.afin = Math.max(-4, r.afin - 3); H.moral = Math.max(0, H.moral - 3); H.inercia = Math.min(10, H.inercia + 1);
+  const s = S(), H = s.historia, r = rel(id); H.par = null; St.memorizar(id, 'Vocês terminaram o namoro.'); r.rom = 0; r.afin = Math.max(-4, r.afin - 3); H.moral = Math.max(0, H.moral - 3); H.inercia = Math.min(10, H.inercia + 1);
   await di(G, nome, ret, ['» Eu acho que a gente precisa parar por aqui.', '* O rosto não muda, mas os olhos já foram para longe.', 'Entendo. Eu... vou ficar bem. Passe bem.', '* Moral −3 · Maré +1. Afinidade ' + r.afin + '.']); mudarAfin(G, id, 0); G.ui.hud();
 }
 

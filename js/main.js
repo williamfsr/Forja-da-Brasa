@@ -2,11 +2,13 @@
 import { iniciarJogo } from './game.js';
 import { instalarUi, montarTitulo } from './ui.js';
 import { precarregarHeroi } from './tokens.js';
+import { instalarZoom } from './zoom.js';
 
 function iniciar() {
   precarregarHeroi();
   instalarUi();
   iniciarJogo(document.getElementById('tela'));
+  instalarZoom();
   montarTitulo();
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* offline indisponível */ }); });

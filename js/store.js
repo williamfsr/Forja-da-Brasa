@@ -4,7 +4,7 @@ import { LIFTS, GRUPOS_TREINO, AERO, INTENSIDADES, ESTUDO_TIPOS, CONQUISTAS, EVE
 import { CAPITULOS, ATOS, finalPorMoral } from './story.js';
 import * as R from './rules.js';
 import { apPadrao } from './cosmeticos.js';
-import { precoVenda } from './economia.js';
+import { precoVenda, COMERCIANTES, NOMES_NEG, nivelNegociacao, modCompra, caixaMax, vendaLoja } from './economia.js';
 import * as Camp from './campanha.js';
 
 export const KEY = 'forja.save.v1';
@@ -35,12 +35,13 @@ export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', 
     catacumbas: { melhor: 0 }, campanha: Camp.novoEstado(),
     conquistas: {}, cfg: { som: true, vibra: true, musica: false, descanso: [0], textoGrande: false },
     timers: {}, relatorio: null, run: null, log: [], inicio: hoje(),
+    rastro: [], glos: { mon: {}, it: {}, lug: {} }, com: {},
   };
   const max = recursosMax(cls, 1); s.recursosMax = max; s.recursos = JSON.parse(JSON.stringify(max));
   s.diario.missoes = R.gerarMissoes(s, s.diario.data); s.diario.evento = R.gerarEvento(s, s.diario.data);
   return s;
 }
-export function novoJogo(cfg) { S = estadoInicial(cfg); const d = R.derivar(S); S.heroi.hp = d.hpMax; iniciarCampanha(true); salvar(); bus.emit('mudou'); return S; }
+export function novoJogo(cfg) { S = estadoInicial(cfg); semearGlos(S); const d = R.derivar(S); S.heroi.hp = d.hpMax; iniciarCampanha(true); salvar(); bus.emit('mudou'); return S; }
 export function salvar() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* armazenamento cheio/bloqueado */ } }
 export function carregar() {
   try { const t = localStorage.getItem(KEY); if (!t) return null; S = migrar(JSON.parse(t)); iniciarCampanha(); return S; } catch (e) { return null; }
@@ -49,7 +50,7 @@ function migrar(s) {
   const base = estadoInicial({ cls: s.heroi.cls });
   const merge = (a, b) => { for (const k of Object.keys(b)) { if (a[k] === undefined) a[k] = b[k]; else if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object') merge(a[k], b[k]); } return a; };
   if (!s.mig5) { if (s.npcs && s.npcs.safira && !s.npcs.ordalia) { s.npcs.ordalia = s.npcs.safira; delete s.npcs.safira; } s.mig5 = true; } // v5: a leitora de cartas virou Ordália
-  return merge(s, base);
+  merge(s, base); semearGlos(s); return s;
 }
 // Maré efetiva: o Selo da Aurora (Safira) silencia a Inércia por alguns dias sem mexer no valor real
 export const inerciaEf = (s = S) => { const H = s && s.historia; if (!H) return 0; return H.selo && hoje() <= H.selo.ate ? 0 : H.inercia; };
@@ -81,14 +82,16 @@ function anunciarLote(ev) {
 // Ativa as primeiras missões (jogo novo) ou as que um save antigo já pode ter; chamado ao criar e ao carregar.
 export function iniciarCampanha(silencioso = false) {
   if (!S || !S.campanha || avaliandoCamp) return; avaliandoCamp = true;
-  try { const ev = Camp.avaliar(S, ganchosCamp); if (!silencioso) anunciarLote(ev); else for (const e of ev) if (e.t === 'fim') logar(`Missão concluída: ${e.q.titulo}.`); } finally { avaliandoCamp = false; }
+  try { const ev = Camp.avaliar(S, ganchosCamp); if (!silencioso) anunciarLote(ev); else for (const e of ev) if (e.t === 'fim') { logar(`Missão concluída: ${e.q.titulo}.`); memorizar(e.q.npc, `Você concluiu "${e.q.titulo}" a pedido dele(a).`); } } finally { avaliandoCamp = false; }
   salvar();
 }
 function anunciarCamp(e) {
   const nome = (id) => (Camp.PERSONAGENS[id] ? Camp.PERSONAGENS[id].nome : '');
+  if (e.t === 'nova' && e.q.tipo === 'principal' && !(S.rastro || []).length) rastrear(e.q.id, true);
+  if (e.t === 'fim') rastrear(e.q.id, false);
   if (e.t === 'nova') pop({ tipo: 'texto', titulo: (e.q.tipo === 'principal' ? 'Missão: ' : 'Missão secundária: ') + e.q.titulo, txt: `${nome(e.q.npc)} — ${e.q.resumo}`, cor: '#ffd24a' });
   else if (e.t === 'passo') pop({ tipo: 'texto', titulo: `${e.q.titulo}: etapa cumprida`, txt: e.fala, cor: '#6fcf7f' });
-  else if (e.t === 'fim') { logar(`Missão concluída: ${e.q.titulo}.`); pop({ tipo: 'texto', titulo: 'Missão concluída!', txt: `${e.q.titulo}. Recompensas entregues.`, cor: '#ff9f40' }); }
+  else if (e.t === 'fim') { logar(`Missão concluída: ${e.q.titulo}.`); memorizar(e.q.npc, `Você concluiu "${e.q.titulo}" a pedido dele(a).`); pop({ tipo: 'texto', titulo: 'Missão concluída!', txt: `${e.q.titulo}. Recompensas entregues.`, cor: '#ff9f40' }); }
   else if (e.t === 'lore') pop({ tipo: 'texto', titulo: `Diário de Nhor: ${e.p.t}`, txt: e.p.txt, cor: '#b49bff' });
   else if (e.t === 'leitura') pop({ tipo: 'texto', titulo: 'O Baralho do Hábito fala', txt: `Ordália vira quatro cartas.\n☀ ${Camp.RELIQUIAS.sol.carta}: ${Camp.SITIOS[e.L.sol].dica}\n✦ ${Camp.RELIQUIAS.simbolo.carta}: ${Camp.SITIOS[e.L.simbolo].dica}\n📖 ${Camp.RELIQUIAS.diario.carta}: ${Camp.SITIOS[e.L.diario].dica}\n♟ ${Camp.ALIADOS[e.L.aliado].carta}: ${Camp.ALIADOS[e.L.aliado].dica}\n(Detalhes no Diário.)`, cor: '#9ad0ff' });
   else if (e.t === 'reliquia') pop({ tipo: 'texto', titulo: `Relíquia: ${e.r.nome}`, txt: e.r.txt, cor: '#ffd24a' });
@@ -162,7 +165,7 @@ function aplicarBau(r) {
   ganharOuro(r.ouro); for (const id of r.itens) invAdd(id, 1); if (r.tocha) S.heroi.tochas = Math.min(15, S.heroi.tochas + 1);
 }
 export function ganharOuro(n) { S.heroi.ouro = Math.max(0, S.heroi.ouro + n); if (n > 0) S.stats.ouroTotal += n; }
-export function invAdd(id, n = 1) { const x = S.inv.find((i) => i.id === id); if (x) x.n += n; else S.inv.push({ id, n }); }
+export function invAdd(id, n = 1) { const x = S.inv.find((i) => i.id === id); if (x) x.n += n; else S.inv.push({ id, n }); descobrirItem(id); }
 export function invDel(id, n = 1) { const x = S.inv.find((i) => i.id === id); if (!x) return false; x.n -= n; if (x.n <= 0) S.inv.splice(S.inv.indexOf(x), 1); return true; }
 export const invQtd = (id) => (S.inv.find((i) => i.id === id) || { n: 0 }).n;
 
@@ -372,10 +375,25 @@ export function equipar(id) {
 }
 export function desequipar(slot) { const id = S.equip[slot]; if (!id) return; invAdd(id, 1); S.equip[slot] = null; ajustarHp(); salvaEmite(); }
 function ajustarHp() { const m = der().hpMax; if (S.heroi.hp > m) S.heroi.hp = m; }
-export function comprar(id, mod = 1) {
-  const it = ITENS[id]; const p = R.precoItem(id, S, mod); if (S.heroi.ouro < p) return { erro: 'Ouro insuficiente.' }; snapshot(); S.heroi.ouro -= p; invAdd(id, 1); salvaEmite(); return { ok: true, p };
+// ----- comércio: afinidade de negociação, preços e caixa diário de cada comerciante -----
+export const relComerciante = (loja) => { const c = COMERCIANTES[loja]; const r = S.npcs[c.npc]; const afin = r ? r.afin | 0 : 0; return { afin, nivel: nivelNegociacao(afin), nome: NOMES_NEG[nivelNegociacao(afin)] }; };
+export function caixaLoja(loja) {
+  const d = hoje(); const e = ((S.com ||= {})[loja] = S.com[loja] && S.com[loja].data === d ? S.com[loja] : { data: d, gasto: 0 }); const max = caixaMax(loja, S.heroi.nivel, relComerciante(loja).nivel);
+  return { max, gasto: e.gasto, resta: Math.max(0, max - e.gasto) };
 }
-export function vender(id) { const it = ITENS[id]; if (!invQtd(id)) return { erro: 'Sem o item.' }; const p = precoVenda(it); invDel(id, 1); ganharOuro(p); salvaEmite(); return { ok: true, p }; }
+export const precoCompra = (id, loja) => Math.max(1, Math.round(R.precoItem(id, S, COMERCIANTES[loja].mod) * modCompra(relComerciante(loja).nivel)));
+export const precoVendaItem = (id, loja) => vendaLoja(ITENS[id], loja, relComerciante(loja).nivel);
+export function comprar(id, loja) {
+  const it = ITENS[id]; if (!it || !COMERCIANTES[loja]) return { erro: 'Item indisponível.' }; const p = precoCompra(id, loja); if (S.heroi.ouro < p) return { erro: 'Ouro insuficiente.' };
+  snapshot(); S.heroi.ouro -= p; invAdd(id, 1); const e = caixaLoja(loja); S.com[loja].gasto = Math.max(0, e.gasto - Math.round(p * 0.5)); salvaEmite(); return { ok: true, p };
+}
+// o herói só vende a comerciantes; eles pagam menos do que cobram e têm um limite de caixa por dia
+export function vender(id, loja) {
+  const it = ITENS[id]; const c = COMERCIANTES[loja]; if (!it || !c) return { erro: 'Só é possível vender a comerciantes.' }; if (!invQtd(id)) return { erro: 'Sem o item.' };
+  if (!c.aceita.includes(it.tipo)) return { erro: `${c.nome} não compra isso.` }; const p = vendaLoja(it, loja, relComerciante(loja).nivel); if (!(p > 0)) return { erro: `${c.nome} não quer isso.` };
+  const cx = caixaLoja(loja); if (p > cx.resta) return { erro: `O caixa de ${c.nome} não cobre isso hoje (restam ${cx.resta} 🪙).`, caixa: true };
+  invDel(id, 1); ganharOuro(p); S.com[loja].gasto += p; salvaEmite(); return { ok: true, p };
+}
 export function usarForaDaMasmorra(id) {
   const it = ITENS[id]; if (!it || !invQtd(id)) return { erro: 'Sem o item.' };
   if (it.selo) { S.historia.selo = { ate: R.addDias(hoje(), it.selo - 1) }; invDel(id); salvaEmite(); return { msg: `🔔 A Névoa recua por ${it.selo} dia(s): a Maré efetiva é 0/10.` }; }
@@ -426,7 +444,30 @@ export function derrotaNaMasmorra() {
   if (r) { r.itensGanhos.forEach(() => {}); } S.run = null; logar(`Derrotado na masmorra (perdeu ${perdido} de ouro do saque).`); salvaEmite(); return perdido;
 }
 export function ganhoDaMasmorra(ouro) { ganharOuro(ouro); if (S.run) S.run.ouroGanho += ouro; }
-export function abateRegistrado(m) { S.stats.abates++; if (m.chefe) {} verificarConquistas(); }
+export function abateRegistrado(m) { S.stats.abates++; avistar(m, true); verificarConquistas(); }
+
+// ---------- glossário (o que o herói já viu), memória dos NPCs e missões rastreadas ----------
+export function semearGlos(s) {
+  const g = (s.glos ||= { mon: {}, it: {}, lug: {} }); g.mon ||= {}; g.it ||= {}; g.lug ||= {}; const d = s.inicio || hoje();
+  for (const i of s.inv || []) if (i && !g.it[i.id]) g.it[i.id] = { d };
+  for (const id of Object.values(s.equip || {})) if (id && !g.it[id]) g.it[id] = { d };
+}
+export function descobrirItem(id) { if (!S || !S.glos || !id) return; if (!S.glos.it[id]) S.glos.it[id] = { d: hoje() }; }
+// m: unidade/monstro criado por criarMonstro (tem id, n, cr…). matou=true conta um abate.
+export function avistar(m, matou = false) {
+  if (!S || !m || !m.id || m.heroi) return; const id = String(m.id); if (m.eq === 'j' || m.aliado) return;
+  const g = (S.glos ||= { mon: {}, it: {}, lug: {} }).mon; const e = (g[id] ||= { d: hoje(), v: 0, k: 0 }); if (matou) e.k++; else e.v++;
+}
+export function avistarLugar(id) { if (!S || !S.glos) return; if (!S.glos.lug[id]) { S.glos.lug[id] = { d: hoje() }; salvar(); } }
+// o que você viveu com um NPC: entra no diário de relações (últimas 14 lembranças)
+export function memorizar(id, txt) {
+  if (!S || !id || !txt) return; const r = (S.npcs[id] ||= { afin: 0, ultimo: null }); const m = (r.memo ||= []);
+  if (m.length && m[m.length - 1].t === txt && m[m.length - 1].d === hoje()) return; m.push({ d: hoje(), t: txt }); if (m.length > 14) m.splice(0, m.length - 14);
+}
+export function garantirRastro() { if (!S || !S.campanha || S.rastroIni) return; S.rastroIni = true; const a = Camp.ativas(S).find((q) => q.tipo === 'principal'); if (a && !(S.rastro || []).length) rastrear(a.id, true); }
+export function rastrear(id, on) {
+  const r = (S.rastro ||= []); const i = r.indexOf(id); if (on === undefined) on = i < 0; if (on && i < 0) r.push(id); else if (!on && i >= 0) r.splice(i, 1); salvar(); bus.emit('mudou'); return on;
+}
 export function andarConcluido(andar, final) {
   const xp = ganharXp(10 + 2 * S.heroi.nivel + andar * 3, 'masmorra', { semMult: true }); S.stats.masmorras++;
   verificarConquistas(); salvaEmite(); return xp;

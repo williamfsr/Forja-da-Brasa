@@ -73,6 +73,16 @@ Depois da primeira abertura o jogo roda sem internet.
 
 > Os dados de treino e alimentação são sugestões de jogo, **não** orientação médica ou nutricional. Respeite seus limites e dias de descanso.
 
+## v7 — Menu de papiro, diário pessoal, ficha em slots, barra de ações e lojas
+
+- **Menu de pausa em papiro** (botão MENU / tecla M), com marcadores laterais: **🗺️ Mapa** (mapa do Vale com as missões e **minimapa** no jogo mostrando as rastreadas; principais ★ e secundárias ◆), **📜 Missões** (andamento, feitas, a descobrir, com etapas, recompensas e *Rastrear*), **👥 Pessoas** (descrição, história que se desbloqueia com a afinidade, o que você já viveu com cada um e **no que ele vem se tornando**), **📖 Glossário** (monstros, itens, lugares e lore **já encontrados**), **🛡️ Herói**, **📚 Crônica** e **⚙️ Sistema**.
+- **Diário pessoal** (marcador *Diário* no menu): caderno de couro com marcadores **Hoje, Treino, Aeróbico, Estudo, Taverna (dieta) e Hábitos**. Ao trocar de marcador ou virar a página (arrastar, ← →) a página **vira com animação**; respeita "reduzir movimento". Treino/dieta/hábitos saíram do menu de missões.
+- **Zoom do mapa:** roda do mouse, pinça no celular/tablet, ou as teclas **+ − 0**.
+- **Ficha do herói em slots quadrados** com ícone: toque num slot para ver ícone grande + descrição + botões (equipar, usar, voltar); **visão frontal do herói** no meio dos slots de equipamento e na aba de habilidades (classe e magias também em slots).
+- **Barra de ações do combate (estilo BG3)**, `js/hotbar.js`: ataques, habilidades de classe, ações padrão (correr, desengajar, esquivar, fugir, falar), **magias por círculo (com espaços restantes)** e consumíveis são **coletados e ordenados automaticamente** a cada turno — nada para configurar. Abas (Tudo / Ações / Habilidades / Magias / Itens) e chips de círculo filtram; marcadores mostram o custo (● ação, ▲ ação bônus, ◆ livre); slots sem recurso ficam apagados com o motivo. **PC:** dock embaixo, dica ao passar o mouse, clique usa, teclas **1–9** acionam os primeiros slots e **F** encerra o turno. **Celular/tablet:** toque seleciona e mostra o cartão (com escolha do círculo da magia), segundo toque (ou *Usar*) executa; no celular deitado vira painel lateral.
+- **Lojas** (Forja, Alquimia, Empório), `js/loja.js`: itens em **slots à esquerda**; **comerciante de frente à direita** com o **nível de afinidade de negociação** acima dele (ligado à afinidade com o NPC: melhora o preço que ele cobra e o que ele paga); a descrição traz **Comprar / Voltar**. O herói **só vende a comerciantes**, que **pagam menos do que cobram**, só compram os tipos do seu ramo e têm um **caixa diário** limitado (renova todo dia; suas compras devolvem metade ao caixa).
+- O módulo *bg3-hud-dnd5e* (Foundry) enviado serviu **apenas de inspiração** de interface; nenhum código dele foi usado ou executado.
+
 ## v6 — Luz, clima, tela cheia, hábitos e dados
 
 - **Tela cheia + controles sobrepostos:** o jogo ocupa a tela inteira; D-pad, **A**, **B** e **MENU** ficam translúcidos por cima. Com o celular **na horizontal**, o D-pad vai para o lado esquerdo e **A/B para o direito**. A câmera considera o que está coberto, então o herói e os alvos ficam sempre na parte livre.
@@ -93,7 +103,8 @@ js/srd.js          regras SRD (classes, magias, monstros, exaustão)
 js/romance.js · festa.js · minigames.js · safira.js · paineis4.js   v5: afinidade/romance/inimizade, festa do 0/10, minigames, Safira, painel Relações
 js/rules.js        mapeamento vida real → personagem, raças, escala de dificuldade
 js/tatico.js       motor de combate tático (iniciativa, mapa, áreas, IA, persuasão e magias sociais), sem DOM
-js/batalha.js      controle de batalha na tela (toque, menus, animações)
+js/batalha.js      controle de batalha na tela (toque, menus, animações) · js/hotbar.js  barra de ações automática (estilo BG3)
+js/pausa.js · js/diario.js · js/loja.js · js/ficha.js · js/zoom.js · js/minimapa.js · js/mapaq.js   v7: menu de papiro, diário pessoal, lojas, ficha em slots, zoom, minimapa
 js/render.js       renderização 32 bits (tiles de 32 px, luz, partículas, câmera, zoom inteiro)
 js/pessoa.js       gerador procedural de pessoas, retratos e armaduras · js/cosmeticos.js  dados de aparência
 js/monstros.js · objetos.js · arte.js · gfx.js   arte procedural (monstros, objetos, terrenos)

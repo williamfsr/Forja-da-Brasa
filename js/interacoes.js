@@ -100,11 +100,11 @@ export async function interagirObjeto(id, G, ctx = {}) {
   if (o.act === 'bau') { G.ui.painel('casa', { aba: 'equip' }); return; }
   if (o.act === 'estante') {
     const n = (s.campanha && s.campanha.lore || []).length; await G.ui.dialogo(o.nome, [...o.linhas, n ? `Você já recuperou ${n} página(s) do Diário de Nhor.` : 'Ainda nenhuma página do Diário. Elas aparecem quando você avança.']);
-    G.ui.painel('diario', { aba: 'lore' }); return;
+    G.ui.painel('menu', { aba: 'glos', sub: 'lore' }); return;
   }
-  if (o.act === 'diario') { await G.ui.dialogo(o.nome, o.linhas); G.ui.painel('diario'); return; }
-  if (o.act === 'baralho') { await G.ui.dialogo(o.nome, o.linhas); G.ui.painel('diario', { aba: 'baralho' }); return; }
-  if (o.act === 'mapa') { await G.ui.dialogo(o.nome, o.linhas); G.ui.painel('mapa'); return; }
+  if (o.act === 'diario') { await G.ui.dialogo(o.nome, o.linhas); G.ui.painel('menu', { aba: 'missoes' }); return; }
+  if (o.act === 'baralho') { await G.ui.dialogo(o.nome, o.linhas); G.ui.painel('menu', { aba: 'glos', sub: 'lore' }); return; }
+  if (o.act === 'mapa') { await G.ui.dialogo(o.nome, o.linhas); G.ui.painel('menu', { aba: 'mapa' }); return; }
   if (o.act === 'ambar' && G.dadiva) { await G.dadiva(); return; }
   if (o.act === 'teo' && G.teo) { await G.ui.dialogo(o.nome, o.linhas); await G.teo(); return; }
   await G.ui.dialogo(o.nome, o.linhas);

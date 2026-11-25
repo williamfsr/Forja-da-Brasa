@@ -156,7 +156,7 @@ registrar('taverna', {
     <label class="campo" for="tv-n">Descrição</label><input id="tv-n" maxlength="40" placeholder="Ex.: Arroz, feijão e frango"><label class="campo" for="tv-k">Calorias (kcal)</label><input id="tv-k" type="number" inputmode="numeric" min="1" max="6000" placeholder="kcal"><button class="btn pri bloco" data-act="add">Anotar (+8 XP nas 5 primeiras)</button></div>
     ${D.comida.map((c, i) => `<div class="lista-item"><div class="nome">${esc(c.n)}<small>${new Date(c.t).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small></div><b>${fmt(c.k)} kcal</b><button class="btn peq ruim" data-act="del" data-i="${i}">✕</button></div>`).join('')}
     ${alvo < 1400 ? '<div class="aviso">A meta de calorias está baixa. Este app é um jogo, não aconselhamento médico: ajuste a meta com um profissional de saúde.</div>' : ''}
-    <p class="peq suave">Sua meta pode ser recalculada em Casa → Config. O dia só é avaliado à meia-noite; você pode ajustar as refeições até lá.</p>`;
+    <p class="peq suave">Sua meta pode ser recalculada em Menu → Sistema. O dia só é avaliado à meia-noite; você pode ajustar as refeições até lá.</p>`;
   },
   acoes: {
     preset: (el) => { document.getElementById('tv-n').value = el.dataset.n; document.getElementById('tv-k').value = el.dataset.k; },
@@ -184,11 +184,11 @@ registrar('missoes', {
   titulo: 'Quadro de Missões',
   render() {
     const s = S(), D = St.dia(); const q = s.sequencia;
-    return `<div class="card"><h4><span>🔥 Sequência: <b class="gold">${q.atual}</b> dia(s)</span><span class="peq suave">recorde ${q.melhor}</span></h4><p class="peq">XP ×${fmt(St.multSequencia(), 2)} · Escudos: ${q.escudos}${q.voltaBonus > 0 ? ` · <b class="verde">bônus de retorno (${q.voltaBonus}d)</b>` : ''}<br>Qualquer atividade (série, aeróbico, estudo, hábito) mantém a sequência. Dias de descanso planejados não a quebram (Casa → Config).</p></div>
+    return `<div class="card"><h4><span>🔥 Sequência: <b class="gold">${q.atual}</b> dia(s)</span><span class="peq suave">recorde ${q.melhor}</span></h4><p class="peq">XP ×${fmt(St.multSequencia(), 2)} · Escudos: ${q.escudos}${q.voltaBonus > 0 ? ` · <b class="verde">bônus de retorno (${q.voltaBonus}d)</b>` : ''}<br>Qualquer atividade (série, aeróbico, estudo, hábito) mantém a sequência. Dias de descanso planejados não a quebram (Menu → Sistema).</p></div>
     <h3>Evento do dia</h3>${blocoEvento()}
     <h3>Missões de hoje ${D.perfeito ? '<span class="tag" style="background:var(--ouro)">DIA PERFEITO</span>' : ''}</h3><p class="peq suave">Cumpra todas: +100 XP, 🕯️ +1 Tocha, −1 Maré da Inércia e um baú especial.</p>
     ${s.diario.missoes.map((m) => { const [em, cor] = PILAR[m.pilar] || ['⭐', '#fff']; return `<div class="card ${m.feito ? 'feito' : ''}" style="border-color:${m.feito ? 'var(--ok)' : cor}"><div class="linha"><span class="fixo" style="font-size:22px">${m.feito ? '✅' : em}</span><div><b>${esc(m.txt)}</b><div class="peq suave">+${m.xp} XP · +${m.ouro} ouro${m.fim ? ' · avaliada ao amanhecer' : ''}</div></div></div>${barra(m.prog || 0, m.alvo, m.feito ? 'ok' : '')}</div>`; }).join('')}
-    <h3>Meus hábitos</h3><p class="peq suave">Rituais diários que dão XP uma vez por dia. Para aderir a novos (ou retirar), abra <b>Menu → 🌱 Hábitos</b>.</p>
+    <h3>Meus hábitos</h3><p class="peq suave">Rituais diários que dão XP uma vez por dia. Para aderir a novos (ou retirar), use o marca-páginas <b>🌱 Hábitos</b> deste diário.</p>
     ${s.habitos.map((h) => `<div class="lista-item"><button class="btn peq ${D.hab[h.id] ? 'ok' : ''}" data-act="habito" data-id="${h.id}" ${D.hab[h.id] ? 'disabled' : ''}>${D.hab[h.id] ? '✔' : '○'}</button><div class="nome ${D.hab[h.id] ? 'feito' : ''}">${esc(h.nome)}<small>+${h.xp} XP</small></div><button class="btn peq ruim" data-act="delhab" data-id="${h.id}">✕</button></div>`).join('') || '<p class="suave">Nenhum hábito ainda.</p>'}
     <div class="card"><div class="linha"><div><label class="campo" for="hb-n">Novo hábito</label><input id="hb-n" maxlength="40" placeholder="Ex.: Beber 2 L de água"></div><div class="fixo" style="width:80px"><label class="campo" for="hb-x">XP</label><input id="hb-x" type="number" inputmode="numeric" value="20" min="5" max="60"></div></div><button class="btn bloco" data-act="addhab">Adicionar hábito</button></div>`;
   },

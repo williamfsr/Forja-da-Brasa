@@ -46,7 +46,7 @@ export async function conversar(G, n, def, pf, ret, nome, extra) {
   const s = S(), id = n.id, ui = G.ui; const r = rel(id); const c = ctx(); const hoje = St.hoje(); const att = ATIT[id] === 'desconfia' ? 1 : 0;
   const di = (txt, extra = {}) => ui.dialogo(nome, Array.isArray(txt) ? txt : [txt], { retrato: ret, ...extra });
   // Abertura: primeira vez reage à aparência; depois, fala o contexto do dia
-  const falas = def.falas || ['...']; const primeira = !r.viu; r.viu = true;
+  const falas = def.falas || ['...']; const primeira = !r.viu; r.viu = true; if (primeira) St.memorizar(id, 'Vocês se conheceram.');
   const aberto = [];
   if (primeira) aberto.push((RACA_L[c.raca] || RACA_L.humano)[att]); else aberto.push(falas[rnd(falas.length)]);
   if (!primeira && extra && rnd(2) === 0) aberto.push(extra);
@@ -98,7 +98,7 @@ async function darRecompensaAfin(G, afin, id, nome, ret) {
 async function papo(G, n, def, pf, ret, nome) {
   const a = rel(n.id), hoje = St.hoje();
   if (a.ultimo === hoje) { await G.ui.dialogo(nome, ['» Podemos conversar mais?', 'Já conversamos hoje. Volte amanhã — sempre tenho mais uma história.'], { retrato: ret }); return; }
-  a.ultimo = hoje; a.afin = Math.min(12, a.afin + 1); const linha = pf.afin[((Math.max(1, a.afin) - 1) % pf.afin.length)]; await G.ui.dialogo(nome, ['» Me conta mais sobre você.', linha], { retrato: ret });
+  a.ultimo = hoje; a.afin = Math.min(12, a.afin + 1); St.memorizar(n.id, 'Você ouviu uma história pessoal dele(a).'); const linha = pf.afin[((Math.max(1, a.afin) - 1) % pf.afin.length)]; await G.ui.dialogo(nome, ['» Me conta mais sobre você.', linha], { retrato: ret });
   await darRecompensaAfin(G, a.afin, n.id, nome, ret); St.salvar(); G.ui.hud();
 }
 async function falarMissao(G, npcId, qid, c, ret, nome) {

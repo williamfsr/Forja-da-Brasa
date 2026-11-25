@@ -19,22 +19,29 @@ export function toast(txt, ms = 3200) {
 // ---------- painéis ----------
 const regs = {}; let atual = null;
 export const registrar = (id, def) => { regs[id] = def; };
+export const painelDef = (id) => regs[id];
+export const painelArgs = () => (atual ? atual.args : undefined);
+// Painéis com "pele" própria (papiro, diário, vitrine…): def.classe aplica classes no #painel enquanto o painel está aberto
+let classesPainel = [];
+function aplicarClasse(def, id) {
+  const P = $('#painel'); P.classList.remove(...classesPainel); classesPainel = def.classe ? def.classe.split(' ') : []; P.classList.add(...classesPainel); P.dataset.p = id;
+}
 export const painelAberto = () => !!atual;
 export const painelId = () => (atual ? atual.id : null);
 export function abrirPainel(id, args) {
   const def = regs[id]; if (!def) { toast('Painel indisponível.'); return; }
-  atual = { id, def, args }; $('#painel').classList.remove('oculto'); $('#painel-titulo').textContent = typeof def.titulo === 'function' ? def.titulo(args) : def.titulo;
+  atual = { id, def, args }; aplicarClasse(def, id); $('#painel').classList.remove('oculto'); $('#painel-titulo').textContent = typeof def.titulo === 'function' ? def.titulo(args) : def.titulo;
   const c = $('#painel-corpo'); c.innerHTML = def.render(args); c.scrollTop = 0; if (def.aoAbrir) def.aoAbrir(args); Au.sfx('confirm');
 }
 export function rerender() {
-  if (!atual) return; const c = $('#painel-corpo'); const topo = c.scrollTop; const vals = {}; const foco = document.activeElement && document.activeElement.id;
+  if (!atual) return; const c = $('#painel-corpo'); const sc = () => (atual.def.rolagem && c.querySelector(atual.def.rolagem)) || c; const topo = sc().scrollTop; const vals = {}; const foco = document.activeElement && document.activeElement.id;
   c.querySelectorAll('input[id],select[id],textarea[id]').forEach((el) => { if (el.dataset.reset === undefined) vals[el.id] = el.type === 'checkbox' ? el.checked : el.value; });
   c.innerHTML = atual.def.render(atual.args);
   for (const [id, v] of Object.entries(vals)) { const el = document.getElementById(id); if (el) { if (el.type === 'checkbox') el.checked = v; else el.value = v; } }
-  c.scrollTop = topo; if (foco) { const f = document.getElementById(foco); if (f && f.tagName !== 'SELECT') f.focus({ preventScroll: true }); }
+  sc().scrollTop = topo; if (foco) { const f = document.getElementById(foco); if (f && f.tagName !== 'SELECT') f.focus({ preventScroll: true }); }
   if (atual.def.aoAbrir) atual.def.aoAbrir(atual.args, true);
 }
-export function fecharPainel() { if (!atual) return; const d = atual.def; atual = null; $('#painel').classList.add('oculto'); if (d.aoFechar) d.aoFechar(); Au.sfx('back'); }
+export function fecharPainel() { if (!atual) return; const d = atual.def; atual = null; $('#painel').classList.add('oculto'); $('#painel').classList.remove(...classesPainel); classesPainel = []; if (d.aoFechar) d.aoFechar(); Au.sfx('back'); }
 export function ligarPainel() {
   const corpo = $('#painel-corpo'); const raiz = $('#painel');
   raiz.addEventListener('click', (e) => {

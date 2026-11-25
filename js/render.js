@@ -14,6 +14,8 @@ import { tokenHeroi, tokenPessoa, tokenMonstro, tamDe, tamanhoPx, desenharToken,
 
 export { TS };
 export const VW = { canvas: null, ctx: null, Z: 3, w: 352, h: 256, cw: 0, ch: 0, sujo: true };
+// zoom do jogador (roda do mouse / pinça): multiplica a escala base; 1 = padrão (escala inteira, pixels nítidos)
+export const ZOOM = { f: 1, min: 0.6, max: 2.6 };
 export const apDe = (s) => normalizarAp(s.heroi.ap, s.heroi.cls);
 export const visDe = (s) => visualDe(s, ITENS, CAPAS);
 export const spriteHeroi = (s, dir = 'baixo', pose = 'idle') => spritePessoa(apDe(s), visDe(s), dir, pose);
@@ -35,7 +37,7 @@ export function iniciarVista(canvas) {
 export function ajustarVista() {
   const c = VW.canvas, box = c.parentElement; const cw = box.clientWidth, ch = box.clientHeight; if (!cw || !ch) return;
   const dpr = Math.min(3, window.devicePixelRatio || 1); const Wd = Math.max(64, Math.round(cw * dpr)), Hd = Math.max(64, Math.round(ch * dpr));
-  const bat = document.body.classList.contains('em-batalha'); const alvoTiles = (cw < 520 ? 9.5 : cw < 900 ? 12 : 15) + (bat ? (cw < 520 ? 1.5 : 3) : 0); const Zw = Math.max(1, Math.round(Wd / (alvoTiles * TS))), Zh = Math.max(1, Math.round(Hd / (7.5 * TS))); const Z = Math.min(Zw, Zh);
+  const bat = document.body.classList.contains('em-batalha'); const alvoTiles = (cw < 520 ? 9.5 : cw < 900 ? 12 : 15) + (bat ? (cw < 520 ? 1.5 : 3) : 0); const Zw = Math.max(1, Math.round(Wd / (alvoTiles * TS))), Zh = Math.max(1, Math.round(Hd / (7.5 * TS))); const Zi = Math.min(Zw, Zh); const Z = Math.abs(ZOOM.f - 1) < 0.02 ? Zi : Math.max(0.6, Math.min(14, Zi * ZOOM.f));
   if (c.width !== Wd || c.height !== Hd) { c.width = Wd; c.height = Hd; }
   VW.cw = cw; VW.ch = ch; VW.Z = Z; VW.w = Math.ceil(Wd / Z); VW.h = Math.ceil(Hd / Z); VW.sujo = false; VW.ctx.imageSmoothingEnabled = false;
 }
@@ -52,7 +54,7 @@ export function medirInsets() {
   const bat = document.body.classList.contains('em-batalha'); let t = 0, b = 0, l = 0, r = 0;
   const hud = R('hud'); if (hud) t = Math.max(t, hud.bottom * 0.85);
   if (bat) { const o = R('bt-ordem'); if (o) t = Math.max(t, o.bottom + 4); const m = R('bt-menu'), h = R('bt-hero');
-    if (m && m.height > 20) { if (m.width < vw * 0.7) r = Math.max(r, vw - m.left); else b = Math.max(b, vh - m.top); }
+    if (m && m.height > 20) { const dock = window.matchMedia && window.matchMedia('(min-width: 900px) and (min-height: 561px)').matches; if (!dock && m.width < vw * 0.7) r = Math.max(r, vw - m.left); else b = Math.max(b, vh - m.top + 6); }
     if (h) { if (h.width < vw * 0.7) b = Math.max(b, (vh - h.top) * 0.5); else b = Math.max(b, vh - h.top); } }
   const novo = { t, b, l, r }; if (novo.t !== INSET.t || novo.b !== INSET.b || novo.r !== INSET.r || novo.l !== INSET.l) { Object.assign(INSET, novo); }
 }

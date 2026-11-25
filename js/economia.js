@@ -34,8 +34,27 @@ export function aplicarPrecos(ITENS) {
     it.magico = (m && +m[2] > 0) || it.tipo === 'acessorio' || !!it.mag;
   }
 }
-// Valor de venda: metade nos itens comuns; itens mágicos valem pouco para o comprador comum.
-export const precoVenda = (it) => Math.max(1, Math.round((it.preco || 2) * (it.magico ? 0.2 : 0.5)));
+// Valor de venda (referência sem comerciante): o herói só vende a comerciantes, que pagam bem menos do que cobram.
+export const precoVenda = (it) => Math.max(1, Math.round((it.preco || 2) * (it.magico ? 0.15 : 0.3)));
+
+// ---------- Comerciantes: afinidade de negociação, preços e caixa diário ----------
+// Cada loja é de um NPC; a afinidade (−10…12) vira um nível de negociação 0…5 que baixa o que ele cobra e sobe o que ele paga.
+export const COMERCIANTES = {
+  forja:      { npc: 'brasa',     nome: 'Mestra Brasa',     titulo: 'Forja de Mestra Brasa', chave: 'ferreiro',   mod: 1,    aceita: ['arma', 'armadura', 'escudo'], pagaK: 1,   caixaK: 1,   emoji: '⚒️' },
+  alquimista: { npc: 'alquimista', nome: 'Zélia',            titulo: 'Alquimia de Zélia',     chave: 'alquimista', mod: 1,    aceita: ['consumivel', 'comida'],       pagaK: 1,   caixaK: 0.8, emoji: '⚗️' },
+  mercador:   { npc: 'quinzinho', nome: 'Quinzinho',        titulo: 'Empório do Quinzinho',  chave: 'mercador',   mod: 1.15, aceita: ['arma', 'armadura', 'escudo', 'acessorio', 'consumivel', 'comida', 'tesouro'], pagaK: 0.9, caixaK: 1.6, emoji: '🎪' },
+};
+export const NOMES_NEG = ['Hostil', 'Neutro', 'Conhecido', 'Próximo', 'Amigo', 'Confidente'];
+export const nivelNegociacao = (afin) => (afin <= -5 ? 0 : afin < 2 ? 1 : afin < 5 ? 2 : afin < 8 ? 3 : afin < 12 ? 4 : 5);
+const MOD_COMPRA = [1.25, 1, 0.97, 0.94, 0.9, 0.85];     // multiplica o que o comerciante cobra
+const PCT_VENDA = [0.2, 0.3, 0.33, 0.36, 0.4, 0.45];     // fração do preço-base que ele paga (sempre abaixo do que cobra)
+export const modCompra = (nivel) => MOD_COMPRA[Math.max(0, Math.min(5, nivel))];
+export function vendaLoja(it, loja, nivel) {
+  const c = COMERCIANTES[loja]; if (!c || !it || !(it.preco > 0)) return 0; if (!c.aceita.includes(it.tipo)) return 0;
+  return Math.max(1, Math.round(it.preco * PCT_VENDA[Math.max(0, Math.min(5, nivel))] * c.pagaK * (it.magico ? 0.5 : 1)));
+}
+// Caixa diário: quanto o comerciante aguenta pagar por dia (cresce com o nível do herói e com a afinidade).
+export const caixaMax = (loja, nivelHeroi, nivelNeg) => Math.round((50 + 38 * Math.pow(Math.max(1, nivelHeroi), 1.25)) * COMERCIANTES[loja].caixaK * (1 + 0.06 * nivelNeg));
 
 // ---------- Fontes de ouro ----------
 export const ouroMissao = (L, f = 1) => Math.max(1, Math.round(PARTE.missoes * ouroPorDia(L) / 4 * f));

@@ -275,7 +275,7 @@ const inerciaMon = (s) => Math.min(St.inerciaEf(s), s.historia.cap <= 2 ? 6 : 10
 const idxId = (id) => parseInt(String(id).slice(1), 10);
 // inicia uma batalha tática sobre o mapa atual
 async function lutar({ inimigos, pos = null, origem, tema, surpresa = false, ents = null }) {
-  pilha.length = 0; Au.sfx('tocha'); const s = S(); const dentro = origem === 'masmorra'; const mw = dentro ? D.d.w : mapa.w, mh = dentro ? D.d.h : mapa.h; const chefe = inimigos.some((m) => m.chefe);
+  pilha.length = 0; Au.sfx('tocha'); const s = S(); const dentro = origem === 'masmorra'; for (const m of inimigos) St.avistar(m); const mw = dentro ? D.d.w : mapa.w, mh = dentro ? D.d.h : mapa.h; const chefe = inimigos.some((m) => m.chefe);
   const emPack = new Set(ents || []); const solidoMundo = dentro
     ? (x, y) => { const d = D.d; if (d.tiles[y * d.w + x] === T.PAREDE) return true; const e = d.ents.find((q) => q.x === x && q.y === y && q.vivo !== false && q.tipo !== 'armadilha' && !(q.tipo === 'tocha_cx' && q.usado) && !emPack.has(q)); return !!e && e.tipo !== 'monstro' ? true : !!e; }
     : (x, y) => solidoEm(mapa, x, y) || !!bauEm(x, y) || !!npcEm(x, y);

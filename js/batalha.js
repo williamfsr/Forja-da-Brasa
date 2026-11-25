@@ -10,6 +10,7 @@ import { retrato } from './pessoa.js';
 import { spriteMonstro } from './monstros.js';
 import * as UI from './uibase.js';
 import * as Au from './audio.js';
+import { montarHotbar } from './hotbar.js';
 
 const TS = Rn.TS;
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -319,7 +320,7 @@ function toqueMagia(bt, x, y, u) {
 function lancarMira(bt) {
   const m = bt.magia, c = bt.confirma; if (!m || !c || c.tipo !== 'mg') return; const cmd = m.id === 'sopro' ? { id: 'sopro', x: c.x, y: c.y } : { id: 'magia', magia: m.id, nv: m.nv, x: c.x, y: c.y }; bt.prevArea = null; return comando(bt, cmd);
 }
-function cancelarMira(bt) { bt.prevArea = null; bt.confirma = null; bt.modo = 'normal'; bt.magia = null; bt.miraTxt = ''; bt.menu = 'magia'; montarMenu(bt); }
+function cancelarMira(bt) { bt.prevArea = null; bt.confirma = null; bt.modo = 'normal'; bt.magia = null; bt.miraTxt = ''; bt.menu = 'raiz'; bt.hbAba = 'mag'; bt.hbSel = null; montarMenu(bt); }
 // painel de mira: nome da magia, o que será atingido e os botões Lançar / Cancelar
 function painelMira(bt, menu) {
   const m = bt.magia, sp = MAGIAS[m.id] || { nome: 'Sopro' }; const g = T.geoDe(m.id); const area = m.id === 'sopro' || ['circulo', 'cone', 'linha', 'muro', 'livre'].includes(g.f);
@@ -382,22 +383,14 @@ function infoSel(bt) {
   const T2 = u.tmp && u.racional ? ` · ${esc(u.tmp)}` : ''; return `<div class="bt-info"><b>${esc(u.nome)}</b> <span class="suave">ND ${u.cr < 1 ? (u.cr === 0.125 ? '1/8' : u.cr === 0.25 ? '1/4' : '1/2') : u.cr} · CA ${u.ca}${T2}</span><div class="bt-barra"><i style="width:${fr}%;background:${fr > 50 ? '#6fcf7f' : fr > 22 ? '#e6d35a' : '#ff5c6c'}"></i></div><small>${Math.ceil(u.hp)}/${u.hpMax} PV${conf ? ' — toque de novo para atacar' : ''}</small></div>`;
 }
 function montarMenu(bt) {
-  const menu = $('#bt-menu'); if (!menu) return; menu.innerHTML = ''; const B = bt.B, H = B.h; montarHero(bt, true);
+  const menu = $('#bt-menu'); if (!menu) return; menu.innerHTML = ''; menu.classList.remove('hb-on'); const B = bt.B, H = B.h; montarHero(bt, true);
   if (bt.fim) { const b = botao(B.fim === 'vitoria' ? 'Continuar' : B.fim === 'derrota' ? 'Voltar à vila' : 'Continuar', bt.aviso || '', () => concluir(bt), { cls: 'bt-larga bt-ok' }); menu.append(b); return; }
   if (bt.ocupado) { menu.append(botao('…', 'toque na tela para acelerar', () => { bt.rapido = true; }, { cls: 'bt-larga' })); return; }
   if (bt.modo === 'magia' && bt.magia) { painelMira(bt, menu); return; }
   if (bt.sel && bt.modo === 'normal') { const d = document.createElement('div'); d.className = 'bt-infobox'; d.innerHTML = infoSel(bt); menu.append(d); if (bt.confirma && bt.confirma.tipo === 'atq' && bt.sel.eq === 'm') menu.append(botao(`⚔ Atacar ${bt.sel.nome}`, `${H.arma.nome}`, () => atacarEm(bt, bt.sel), { off: H.acoes <= 0, cls: 'sel bt-ok' })); }
   if (bt.menu === 'raiz') {
-    const mags = T.magiasDoHeroi(B).filter((m) => (m.nv === 0 || m.circulos.length)); const itens = B.inv.map((x, i) => ({ x, i })).filter(({ x }) => x.n > 0 && ITENS[x.id] && ITENS[x.id].tipo === 'consumivel');
-    const dica = { normal: bt.confirma ? 'Toque de novo no mesmo ponto para confirmar.' : 'Toque no mapa: azul = onde você pode ir; toque num inimigo para atacar.', atacar: 'Toque num inimigo destacado em vermelho.', magia: 'Toque no alvo; toque de novo para lançar.', falar: 'Toque num inimigo para conversar.', item: 'Toque no alvo do item.' }[bt.modo]; const dd = document.createElement('div'); dd.className = 'bt-dica'; dd.textContent = dica; menu.append(dd);
-    const g = document.createElement('div'); g.className = 'bt-grade'; menu.append(g);
-    g.append(botao('Atacar', `${H.arma.nome}${H.ataques > 1 ? ' ×' + H.ataques : ''}`, () => { bt.modo = bt.modo === 'atacar' ? 'normal' : 'atacar'; bt.smite = null; bt.sel = null; bt.confirma = null; montarMenu(bt); }, { off: H.acoes <= 0, cls: bt.modo === 'atacar' ? 'sel' : '' }));
-    g.append(botao('Magia', mags.length ? `${mags.length}` : '—', () => { bt.menu = 'magia'; montarMenu(bt); }, { off: !mags.length }));
-    g.append(botao('Habil.', 'classe', () => { bt.menu = 'hab'; montarMenu(bt); }));
-    g.append(botao('Itens', itens.length ? `${itens.length}` : '—', () => { bt.menu = 'item'; montarMenu(bt); }, { off: !itens.length || H.acoes <= 0 }));
-    g.append(botao('Falar', 'persuadir', () => { bt.modo = bt.modo === 'falar' ? 'normal' : 'falar'; bt.miras = []; bt.confirma = null; montarMenu(bt); }, { off: H.acoes <= 0 || !T.inimigosDe(B, H).some((e) => e.racional || (e.tags || []).includes('fera')), cls: bt.modo === 'falar' ? 'sel' : '' }));
-    g.append(botao(bt.auto ? 'Auto: ON' : 'Auto', 'ação sugerida', () => { bt.auto = !bt.auto; if (bt.auto) autoTurno(bt); else montarMenu(bt); }, { cls: 'bt-auto' }));
-    g.append(botao('Fim do turno ▶', `Mov ${H.movRest}`, () => fimTurno(bt), { cls: 'bt-fim' }));
+    const dica = { normal: bt.confirma ? 'Toque de novo no mesmo ponto para confirmar.' : 'Toque no mapa: azul = onde você pode ir; toque num inimigo para atacar.', atacar: 'Toque num inimigo destacado em vermelho.', magia: 'Toque no alvo; toque de novo para lançar.', falar: 'Toque num inimigo para conversar.', item: 'Toque no alvo do item.' }[bt.modo];
+    montarHotbar(bt, menu, apiHotbar(bt, dica));
     return;
   }
   menu.append(botao('‹ Voltar', '', () => { bt.menu = 'raiz'; bt.modo = 'normal'; bt.magia = null; bt.prevArea = null; bt.confirma = null; montarMenu(bt); }, { cls: 'bt-voltar' }));
@@ -417,6 +410,19 @@ function montarMenu(bt) {
   } else if (bt.menu === 'item') {
     B.inv.forEach((x, i) => { if (x.n > 0 && ITENS[x.id] && ITENS[x.id].tipo === 'consumivel') lista.append(botao(`${ITENS[x.id].nome} ×${x.n}`, ITENS[x.id].desc || '', () => escolherItem(bt, i), { off: H.acoes <= 0 })); });
   }
+}
+// ações que a barra (hotbar.js) dispara; cada uma reaproveita o fluxo de sempre do combate
+function apiHotbar(bt, dica) {
+  return {
+    dica, rerender: () => montarMenu(bt),
+    atacar: () => { bt.modo = bt.modo === 'atacar' && !bt.smite ? 'normal' : 'atacar'; bt.smite = null; bt.sel = null; bt.confirma = null; montarMenu(bt); },
+    falar: () => { bt.modo = bt.modo === 'falar' ? 'normal' : 'falar'; bt.miras = []; bt.confirma = null; montarMenu(bt); },
+    hab: (a) => { if (a.id.startsWith('smite') && bt.modo === 'atacar' && bt.smite === a.id) { bt.modo = 'normal'; bt.smite = null; montarMenu(bt); return; } escolherHab(bt, a); },
+    magia: (sp, nv) => escolherMagia(bt, sp, nv || sp.nv),
+    item: (i) => escolherItem(bt, i),
+    auto: () => { bt.auto = !bt.auto; if (bt.auto) autoTurno(bt); else montarMenu(bt); },
+    fim: () => fimTurno(bt),
+  };
 }
 const resumo = (t) => { t = String(t || '').replace(/\s*\[[^\]]*\]/g, '').trim(); const p = t.split(/(?<=[.!?])\s/)[0] || t; return p.length > 74 ? p.slice(0, 72).trimEnd() + '…' : p; };
 function escolherMagia(bt, sp, nv) {

@@ -16,7 +16,7 @@ registrar('viagem', {
     const livres = DESTINOS_VIAGEM.filter(ok), faltam = DESTINOS_VIAGEM.length - livres.length;
     return `<p class="suave">O Marco das Viagens guarda a lembrança de cada lugar que você já pisou. Tocar nele leva você para lá sem custo — a Névoa não segura quem conhece o caminho.</p>${emMasmorra ? '<p class="verm">Não dá para viajar de dentro de uma masmorra.</p>' : ''}${livres.map(card).join('')}${faltam ? `<p class="suave peq" style="text-align:center">🔒 ${faltam} lugar(es) por descobrir — ande até lá uma vez para poder voltar num piscar de olhos.</p>` : ''}<button class="btn bloco" data-act="mapa">🗺️ Abrir o mapa do Vale</button>`;
   },
-  acoes: { ir: async (el) => { fecharPainel(); await G.viajar(el.dataset.id); }, mapa: () => G.ui.painel('mapa') },
+  acoes: { ir: async (el) => { fecharPainel(); await G.viajar(el.dataset.id); }, mapa: () => G.ui.painel('menu', { aba: 'mapa' }) },
 });
 
 registrar('mapa', {
