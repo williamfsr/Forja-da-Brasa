@@ -5,9 +5,11 @@ import { CLASSES, ITENS, ATRIBUTOS, ATR_NOME } from './srd.js';
 import { GRUPOS_TREINO, ATR_FONTE, CONQUISTAS, CAPAS, TIERS } from './conteudo.js';
 import { CAPITULOS, ATOS, PROLOGO, FINAIS } from './story.js';
 import { registrar, abrirPainel, fecharPainel, rerender, esc, fmt, val, valNum, toast, pct, confirmar, $, $$, popup } from './uibase.js';
-import { S, tierTag, escada, barra, descItem, nomeItem, raridadeTag, recursosHtml } from './uiutil.js';
+import { S, tierTag, escada, barra, descItem, nomeItem, raridadeTag, icoItem, recursosHtml } from './uiutil.js';
 import { G } from './game.js';
 import * as Au from './audio.js';
+import { montarEditor } from './criador.js';
+import * as Camp from './campanha.js';
 
 // ======================= MENU =======================
 registrar('menu', {
@@ -15,7 +17,7 @@ registrar('menu', {
   render() {
     const T = (id, em, n) => `<button class="tile" data-act="ir" data-id="${id}"><span class="em">${em}</span>${n}</button>`;
     const noVale = G.modo === 'vale', naMasmorra = G.modo === 'masmorra';
-    return `<p class="suave">Registre a vida real aqui, de qualquer lugar. As lojas e o templo ficam na vila.</p><div class="grade3">${T('arena', '🏋️', 'Arena de Ferro')}${T('trilha', '🏃', 'Trilha')}${T('biblioteca', '📚', 'Biblioteca')}${T('taverna', '🍖', 'Taverna')}${T('missoes', '📜', 'Missões')}${T('livro', '📖', 'Livro')}${T('casa', '🏠', 'Casa / Ficha')}${T('ajuda', '❓', 'Como jogar')}</div>
+    return `<p class="suave">Registre a vida real aqui, de qualquer lugar. As lojas e o templo ficam na vila.</p><div class="grade3">${T('arena', '🏋️', 'Arena de Ferro')}${T('trilha', '🏃', 'Trilha')}${T('biblioteca', '📚', 'Biblioteca')}${T('taverna', '🍖', 'Taverna')}${T('missoes', '📜', 'Missões')}${T('livro', '📖', 'Livro')}${T('diario', '🗺️', 'Diário')}${T('casa', '🏠', 'Casa / Ficha')}${T('ajuda', '❓', 'Como jogar')}</div>
     ${noVale ? '<button class="btn bloco" data-act="vila">🏘️ Voltar para a vila</button>' : ''}${naMasmorra ? '<button class="btn ruim bloco" data-act="sair">🚪 Sair da masmorra</button>' : ''}`;
   },
   acoes: {
@@ -26,7 +28,7 @@ registrar('menu', {
 });
 
 // ======================= CASA =======================
-let casaAba = 'ficha'; let casaMsg = '';
+let casaAba = 'ficha'; let casaMsg = ''; let edCasa = null;
 const EXAUSTAO = ['Sem exaustão.', 'Fugir fica mais difícil.', 'Você age depois dos inimigos e fugir é bem mais difícil.', 'Desvantagem em todos os seus ataques.', 'Seus PV máximos caem pela metade.', 'Exausto demais: sem Tochas, você não consegue entrar em masmorras.'];
 function abaFicha() {
   const s = S(), d = St.der(), cls = CLASSES[s.heroi.cls], pr = R.progressosAtributo(s), pn = R.progressoNivel(s.heroi.xp); const e = s.heroi.exaustao;
@@ -62,7 +64,7 @@ function abaConfig() {
   <h3>Dias de descanso planejado</h3><div class="card"><p class="peq suave">Esses dias da semana não quebram a sequência nem sobem a Maré da Inércia.</p><div class="linha" style="gap:5px">${dias.map((n, i) => `<button class="btn peq fixo ${(s.cfg.descanso || []).includes(i) ? 'pri' : ''}" data-act="dia" data-i="${i}">${n}</button>`).join('')}</div></div>
   <h3>Som e vibração</h3><div class="card"><div class="linha" style="gap:6px"><button class="btn peq ${s.cfg.som ? 'pri' : ''}" data-act="tog" data-k="som">Efeitos ${s.cfg.som ? 'ON' : 'OFF'}</button><button class="btn peq ${s.cfg.musica ? 'pri' : ''}" data-act="tog" data-k="musica">Música ${s.cfg.musica ? 'ON' : 'OFF'}</button><button class="btn peq ${s.cfg.vibra ? 'pri' : ''}" data-act="tog" data-k="vibra">Vibração ${s.cfg.vibra ? 'ON' : 'OFF'}</button></div></div>
   <h3>Backup</h3><div class="card"><p class="peq suave">Seu progresso fica salvo neste aparelho. Exporte de vez em quando para não perder nada.</p><button class="btn bloco" data-act="exportar">⬇ Baixar backup (.json)</button><button class="btn bloco" data-act="copiar">📋 Copiar backup</button><label class="campo" for="cf-imp">Importar backup</label><input id="cf-imp" type="file" accept=".json,application/json" data-on="importar" data-reset><button class="btn ruim bloco" data-act="zerar">Apagar tudo e recomeçar</button></div>
-  <h3>Sobre</h3><div class="card peq"><p><b>Forja da Brasa</b> · aventura 8-bit que transforma treino, aeróbico, estudo e alimentação em progresso de D&amp;D 5e (nível 1–20).</p><p class="suave">Contém material do <b>System Reference Document 5.1</b> da Wizards of the Coast LLC (dnd.wizards.com/resources/systems-reference-document), licenciado sob Creative Commons Attribution 4.0 (CC-BY-4.0). Textos em português adaptados da tradução comunitária dnd5e-pt-br. Código sob licença MIT. Este app é recreativo e não substitui orientação médica ou nutricional.</p></div>`;
+  <h3>Sobre</h3><div class="card peq"><p><b>Forja da Brasa</b> · aventura 32 bits que transforma treino, aeróbico, estudo e alimentação em progresso de D&amp;D 5e (nível 1–20).</p><p class="suave">Contém material do <b>System Reference Document 5.1</b> da Wizards of the Coast LLC (dnd.wizards.com/resources/systems-reference-document), licenciado sob Creative Commons Attribution 4.0 (CC-BY-4.0). Textos em português adaptados da tradução comunitária dnd5e-pt-br. Código sob licença MIT. Este app é recreativo e não substitui orientação médica ou nutricional.</p></div>`;
 }
 function tdeeTxt() {
   const h = S().heroi; const f = parseFloat(val('cf-ativ')) || 1.2, o = parseFloat(val('cf-obj')) || 1; const base = R.tmb(h.sexo, valNum('cf-peso') || h.peso, valNum('cf-alt') || h.altura, valNum('cf-ida') || h.idade);
@@ -71,10 +73,10 @@ function tdeeTxt() {
 registrar('casa', {
   titulo: 'Casa do Herói',
   render() {
-    const abas = [['ficha', 'Ficha'], ['equip', 'Mochila'], ['conq', 'Conquistas'], ['config', 'Config']];
-    return `<div class="abas">${abas.map(([k, n]) => `<button class="${casaAba === k ? 'sel' : ''}" data-act="aba" data-k="${k}">${n}</button>`).join('')}</div>${casaAba === 'ficha' ? abaFicha() : casaAba === 'equip' ? abaEquip() : casaAba === 'conq' ? abaConq() : abaConfig()}`;
+    const abas = [['ficha', 'Ficha'], ['ap', 'Aparência'], ['equip', 'Mochila'], ['conq', 'Conquistas'], ['config', 'Config']];
+    return `<div class="abas">${abas.map(([k, n]) => `<button class="${casaAba === k ? 'sel' : ''}" data-act="aba" data-k="${k}">${n}</button>`).join('')}</div>${casaAba === 'ficha' ? abaFicha() : casaAba === 'ap' ? '<div id="ed-host"></div><p class="peq suave">As mudanças são salvas automaticamente. Raça e cosméticos não alteram a classe, mas a raça concede bônus de atributo.</p>' : casaAba === 'equip' ? abaEquip() : casaAba === 'conq' ? abaConq() : abaConfig()}`;
   },
-  aoAbrir: () => { const el = $('#cf-tdee'); if (el) el.innerHTML = tdeeTxt(); },
+  aoAbrir: () => { const el = $('#cf-tdee'); if (el) el.innerHTML = tdeeTxt(); const h = $('#ed-host'); if (h) { const hh = S().heroi; let t = null; edCasa = { ap: hh.ap, cls: hh.cls, aba: edCasa ? edCasa.aba : 'raca', aoMudar: (ap) => { hh.ap = ap; clearTimeout(t); t = setTimeout(() => { St.salvar(); St.bus.emit('mudou'); }, 400); } }; montarEditor(h, edCasa); } },
   ao: {
     tdee: () => { const el = $('#cf-tdee'); if (el) el.innerHTML = tdeeTxt(); },
     importar: (el) => { const f = el.files && el.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { St.importar(String(r.result)); toast('Backup importado!'); setTimeout(() => location.reload(), 600); } catch (e) { toast('Arquivo inválido.'); } }; r.readAsText(f); },
@@ -106,15 +108,51 @@ registrar('livro', {
     const meter = (v, max, cls) => `<div class="prog ${cls}"><i style="width:${pct(v, max)}%"></i></div>`;
     return `<div class="card"><h4><span>🏘️ Moral da Vila</span><b>${H.moral}/100</b></h4>${meter(H.moral, 100, 'azul')}<p class="peq suave">Sobe com decisões generosas e dias perfeitos. Moral alta baixa os preços das lojas e define o final.</p>
     <h4><span>🌑 Maré da Inércia</span><b>${H.inercia}/10</b></h4>${meter(H.inercia, 10, '')}<p class="peq suave">Sobe a cada dia sem atividade; desce com dias perfeitos. Em 7+ os monstros ganham força; em 10 o Rei acorda furioso. ${H.inercia >= 7 ? '<b class="verm">Cuidado!</b>' : ''}</p></div>
-    ${fim ? `<div class="card" style="border-color:var(--ouro)"><h4><span>${esc(FINAIS[fim].nome)}</span></h4>${FINAIS[fim].txt.map((t) => `<p>${esc(t)}</p>`).join('')}<button class="btn pri bloco" data-act="ciclo">Começar o próximo ciclo (+12% de dificuldade)</button></div>` : ''}
+    ${fim ? `<div class="card" style="border-color:var(--ouro)"><h4><span>${esc(FINAIS[fim].nome)}</span></h4>${FINAIS[fim].txt.map((t) => `<p>${esc(t)}</p>`).join('')}<button class="btn pri bloco" data-act="ciclo">⏳ Laço do Tempo: recomeçar (+12% de dificuldade)</button><button class="btn bloco" data-act="explorador">🗝️ ${s.campanha.modo === 'explorador' ? 'Modo Explorador ativo' : 'Virar Explorador de Catacumbas'}</button></div>` : ''}
     <button class="btn bloco" data-act="prologo">📜 Reler o prólogo</button>
     <h3>Capítulo atual</h3>${ativo ? (() => { const c = CAPITULOS[ativo - 1]; return `<div class="card" style="border-color:var(--brasa)"><h4><span>Cap. ${c.n} — ${esc(c.titulo)}</span></h4><p class="peq suave">${esc(ATOS[c.ato - 1].nome)} · ${esc(c.local)} · ${c.andares} andares${H.checkpoint[c.n] ? ` · checkpoint: andar ${H.checkpoint[c.n]}` : ''}</p>${linhasCap(c, H.flags).map((t) => `<p class="peq">${esc(t)}</p>`).join('')}<p class="peq suave">Chefe: <b>${esc(c.boss.nome)}</b>. ${G.modo === 'vila' ? 'Use o Portal ao norte ou ande até a caverna brilhante no Vale.' : 'Vá até a caverna brilhante no Vale.'}</p></div>`; })() : fim ? '<p class="suave">Todos os capítulos foram concluídos.</p>' : `<p class="suave">Nenhum capítulo disponível agora: suba de nível com a vida real!</p>`}
     <h3>Capítulos</h3>${CAPITULOS.map((c) => { const feito = H.limpos.includes(c.n), lock = c.n > s.heroi.nivel; const dec = H.decisoes[c.n]; return `<div class="lista-item" style="opacity:${lock ? 0.45 : 1}"><span class="fixo">${feito ? '✅' : lock ? '🔒' : c.n === ativo ? '➤' : '○'}</span><div class="nome"><b>${c.n}. ${esc(c.titulo)}</b><small>${esc(c.local)} · nível ${c.n}${feito && dec != null ? ` · escolha: ${esc(c.decisao.opcoes[dec].t)}` : ''}</small></div></div>`; }).join('')}`;
   },
   acoes: {
     prologo: async () => { fecharPainel(); await G.ui.dialogo('Prólogo', PROLOGO); },
-    ciclo: async () => { const ok = await confirmar('Novo ciclo?', 'Os capítulos reiniciam com monstros 12% mais fortes. Você mantém nível, itens e ouro.', 'Começar', 'Cancelar'); if (ok) { St.novoCiclo(); rerender(); } },
+    ciclo: async () => { const ok = await confirmar('Laço do Tempo?', 'Os capítulos e as missões recomeçam, com monstros 12% mais fortes. Você mantém nível, itens e ouro.', 'Voltar no tempo', 'Cancelar'); if (ok) { St.novoCiclo(); rerender(); } },
+    explorador: () => { St.escolherModoFinal('explorador'); toast('Catacumbas infinitas com todo o bestiário. Você pode voltar à campanha a qualquer momento.'); rerender(); },
   },
+});
+
+// ======================= DIÁRIO (missões, Baralho, lore) =======================
+let diarioAba = 'missoes';
+registrar('diario', {
+  titulo: 'Diário da Campanha',
+  render() {
+    const s = S(), C = s.campanha; const L = C.leitura;
+    const abas = [['missoes', '📜 Missões'], ['baralho', '🃏 Baralho'], ['lore', '📖 Nhor']].map(([k, n]) => `<button class="btn ${diarioAba === k ? 'pri' : ''}" data-act="aba" data-id="${k}">${n}</button>`).join('');
+    const nomeNpc = (id) => (Camp.PERSONAGENS[id] || { nome: '' }).nome;
+    const cartaQuest = (q) => { const pr = Camp.progressoQuest(s, q); const feita = C.q[q.id].est === 'feita';
+      return `<div class="card" style="${feita ? 'opacity:.6' : q.tipo === 'principal' ? 'border-color:var(--ouro)' : ''}"><h4><span>${feita ? '✅' : q.tipo === 'principal' ? '⭐' : '🔹'} ${esc(q.titulo)}</span><small>${esc(nomeNpc(q.npc))}</small></h4><p class="peq suave">${esc(q.resumo)}</p>${feita ? '' : `<p class="peq"><b>Etapa ${pr.passo + 1}/${pr.de}:</b> ${esc(pr.txt)}</p><div class="prog"><i style="width:${pct(pr.a, pr.n)}%"></i></div><p class="peq suave">${Math.floor(pr.a)}/${pr.n}</p>`}</div>`; };
+    let h = `<div style="display:flex;gap:6px;margin-bottom:8px">${abas}</div>`;
+    if (diarioAba === 'missoes') {
+      const at = Camp.ativas(s), fe = Camp.feitas(s); const bloqueadas = Camp.QUESTS.filter((q) => !C.q[q.id]);
+      h += `<h3>Em andamento (${at.length})</h3>${at.map(cartaQuest).join('') || '<p class="suave">Nenhuma missão ativa. Suba de nível e avance nos capítulos para desbloquear novas.</p>'}`;
+      h += `<h3>Concluídas (${fe.length}/${Camp.QUESTS.length})</h3>${fe.map(cartaQuest).join('') || '<p class="suave">Ainda não há missões concluídas.</p>'}`;
+      h += `<h3>A descobrir</h3>${bloqueadas.slice(0, 6).map((q) => `<div class="lista-item" style="opacity:.55"><span class="fixo">🔒</span><div class="nome"><b>${esc(q.titulo)}</b><small>${q.tipo === 'principal' ? 'Principal' : 'Secundária'} · nível ${q.nv}</small></div></div>`).join('')}`;
+    } else if (diarioAba === 'baralho') {
+      if (!L) h += '<p class="suave">Dona Safira ainda não leu o Baralho do Hábito para você. Conclua a missão <b>O Baralho do Hábito</b> (nível 5).</p>';
+      else {
+        const linha = (k, nomeRel, cap, dica, ok) => `<div class="card"><h4><span>${ok ? '✅' : '🃏'} ${esc(nomeRel)}</span><small>${cap ? 'Cap. ' + cap + ' — ' + esc(Camp.SITIOS[cap].nome) : ''}</small></h4><p class="peq suave">${esc(dica)}</p></div>`;
+        h += `<p class="peq suave">Ciclo ${L.ciclo}. As cartas mudam a cada Laço do Tempo.</p>`;
+        for (const k of ['sol', 'simbolo', 'diario']) h += linha(k, Camp.RELIQUIAS[k].nome, L[k], Camp.SITIOS[L[k]].dica + ' — ' + Camp.RELIQUIAS[k].txt, !!C.rel[k]);
+        const a = Camp.ALIADOS[L.aliado]; h += linha('aliado', a.nome, L.aliadoCap, a.dica, s.companheiros.some((c) => c.aliadoId === L.aliado));
+        h += `<p class="peq suave">Relíquias em mãos: ${Camp.nReliquias(s)}/3. Cada uma enfraquece Nhor-Kaal em 8% de PV.</p>`;
+      }
+    } else {
+      const lidas = Camp.PAGINAS.filter((p) => C.lore.includes(p.id));
+      h += `<p class="peq suave">Páginas do Diário de Nhor encontradas: <b>${lidas.length}/${Camp.PAGINAS.length}</b>. Elas aparecem ao vencer capítulos e concluir missões.</p>`;
+      h += Camp.PAGINAS.map((p) => (C.lore.includes(p.id) ? `<div class="card"><h4><span>${esc(p.t)}</span></h4><p class="peq">${esc(p.txt)}</p></div>` : '<div class="lista-item" style="opacity:.4"><span class="fixo">▒</span><div class="nome"><b>Página perdida</b></div></div>')).join('');
+    }
+    return h;
+  },
+  acoes: { aba: (el) => { diarioAba = el.dataset.id; rerender(); } },
 });
 
 // ======================= LOJAS =======================
@@ -125,7 +163,7 @@ function loja(id, lojaKey, titulo, mod = 1) {
     render() {
       const s = S(); const est = R.estoqueLoja(s, lojaKey, s.diario.data);
       const comprar = est.map((iid) => { const it = ITENS[iid]; const p = R.precoItem(iid, s, mod); const equip = ['arma', 'armadura', 'escudo', 'acessorio'].includes(it.tipo); const pode = !equip || St.podeEquipar(it);
-        return `<div class="card"><h4><span>${esc(it.nome)}</span>${raridadeTag(it.raro)}</h4><p class="peq suave">${esc(descItem(it))}</p><button class="btn peq pri bloco" data-act="comprar" data-id="${iid}" ${s.heroi.ouro >= p && pode ? '' : 'disabled'}>${pode ? `Comprar — ${fmt(p)} 🪙` : 'Sua classe não usa'}</button></div>`; }).join('');
+        return `<div class="card"><h4><span>${icoItem(it)}${esc(it.nome)}</span>${raridadeTag(it.raro)}</h4><p class="peq suave">${esc(descItem(it))}</p><button class="btn peq pri bloco" data-act="comprar" data-id="${iid}" ${s.heroi.ouro >= p && pode ? '' : 'disabled'}>${pode ? `Comprar — ${fmt(p)} 🪙` : 'Sua classe não usa'}</button></div>`; }).join('');
       const vender = s.inv.filter((i) => ITENS[i.id] && ITENS[i.id].preco > 0).map((i) => { const it = ITENS[i.id]; return `<div class="lista-item"><div class="nome">${esc(it.nome)} ${i.n > 1 ? '×' + i.n : ''}<small>${esc(descItem(it))}</small></div><button class="btn peq" data-act="vender" data-id="${i.id}">${Math.max(1, Math.round(it.preco * 0.4))} 🪙</button></div>`; }).join('') || '<p class="suave">Nada para vender.</p>';
       return `<p class="suave">Seu ouro: <b class="gold">${fmt(s.heroi.ouro)} 🪙</b> · Moral da vila ${s.historia.moral} → preços ${s.historia.moral >= 70 ? '−10%' : s.historia.moral >= 40 ? 'normais' : s.historia.moral >= 20 ? '+10%' : '+25%'}. O estoque muda todo dia.</p>
       <div class="abas"><button class="${aba === 'comprar' ? 'sel' : ''}" data-act="aba" data-k="comprar">Comprar</button><button class="${aba === 'vender' ? 'sel' : ''}" data-act="aba" data-k="vender">Vender</button></div>${aba === 'comprar' ? comprar : vender}`;
@@ -181,6 +219,8 @@ registrar('ajuda', {
     <div class="card"><h4>🍖 Comida</h4><p class="peq">Anote suas kcal. Comer perto da meta (±10%) é um <b>Banquete</b>: recursos 100%, Inspiração e −1 Exaustão. Comer de menos ou demais reduz seus recursos de descanso (espaços de magia, Surtos, Fúria…) e pode causar exaustão ou sonolência.</p></div>
     <div class="card"><h4>🕯️ Tochas e 🌑 Inércia</h4><p class="peq">Cada andar de masmorra custa 1 Tocha (só se ganha na vida real). Dias sem atividade sobem a Maré da Inércia, que fortalece os monstros. Missões e dias perfeitos a fazem recuar. Sua <b>sequência</b> aumenta o XP; dias de descanso planejados não a quebram.</p></div>
     <div class="card"><h4>🎮 Controles</h4><p class="peq">Direcional para andar, <b>A</b> para falar/abrir, <b>B</b> para voltar, <b>MENU</b> para os painéis. No PC: setas ou WASD, Z/Enter = A, X/Esc = B, M = menu.</p></div>
+    <div class="card"><h4>⚔️ Combate tático</h4><p class="peq">Os combates acontecem no próprio mapa, por turnos (iniciativa no topo). No seu turno: toque numa casa <b>azul</b> para mover (toque de novo para confirmar), toque num inimigo para atacar, ou use <b>Magia / Habil. / Itens</b>. Magias em área mostram o alcance antes de lançar, e atingem aliados também. <b>Falar</b> abre a conversa com inimigos racionais e feras: persuadir, intimidar, subornar, domar, ou usar magias como Enfeitiçar Pessoa. Arraste o mapa para olhar ao redor.</p></div>
+    <div class="card"><h4>🧙 Personalização</h4><p class="peq">Em <b>Casa → Aparência</b> você muda raça, rosto, cabelo, barba, roupas, armadura e cores quando quiser. Converse com os moradores da vila uma vez por dia para ganhar afinidade e recompensas.</p></div>
     <p class="peq suave">Dica de ouro: o melhor jeito de jogar é treinar, estudar e comer bem de verdade. O jogo recompensa quem volta amanhã.</p>`;
   },
 });

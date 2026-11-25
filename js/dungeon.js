@@ -1,9 +1,10 @@
 // Gerador procedural de masmorras (salas + corredores), determinístico por semente.
 import { mulberry32, escolhe, criarMonstro, poolCatacumbas, ouroDoMonstro, escalaNivel } from './rules.js';
+import { criarGrupo, tamanhoGrupo, comPerfil } from './encontros.js';
 
 export const T = { PAREDE: 0, CHAO: 1, DESCE: 2, SOBE: 3, SAIDA: 4, BOSS_PORTAL: 5 };
 
-export function gerarMasmorra({ seed, andar = 1, final = false, tema = 'porao', pool = [], nivel = 1, chefe = null, inercia = 0, ciclo = 1, ajuste = 1, w = 38, h = 30 }) {
+export function gerarMasmorra({ seed, andar = 1, final = false, tema = 'porao', pool = [], nivel = 1, chefe = null, inercia = 0, ciclo = 1, ajuste = 1, escala = null, explorador = false, w = 38, h = 30 }) {
   const rng = mulberry32(seed >>> 0);
   const ri = (a, b) => a + Math.floor(rng() * (b - a + 1));
   const tiles = new Uint8Array(w * h); const salas = [];
@@ -37,17 +38,18 @@ export function gerarMasmorra({ seed, andar = 1, final = false, tema = 'porao', 
   const livre = (r) => { for (let t = 0; t < 30; t++) { const x = ri(r.x, r.x + r.w - 1), y = ri(r.y, r.y + r.h - 1); const i = idx(x, y); if (!ocupado.has(i) && tiles[i] === T.CHAO) { ocupado.add(i); return { x, y }; } } return null; };
   if (final) {
     tiles[idx(fimSala.cx, fimSala.cy)] = T.CHAO; ocupado.add(idx(fimSala.cx, fimSala.cy));
-    const mon = criarMonstro(chefe.base, { chefe: true, ov: { ...(chefe.ov || {}), dm: (chefe.dm || 1) * ajuste }, nome: chefe.nome, esc: chefe.esc, inercia, ciclo });
+    const mon = comPerfil(criarMonstro(chefe.base, { chefe: true, ov: { ...(chefe.ov || {}), dm: (chefe.dm || 1) * ajuste }, nome: chefe.nome, esc: chefe.esc, inercia, ciclo }), rng);
     ents.push({ tipo: 'chefe', x: fimSala.cx, y: fimSala.cy, mon, spr: mon.spr, pal: mon.pal });
   } else {
     tiles[idx(fimSala.cx, fimSala.cy)] = T.DESCE; ocupado.add(idx(fimSala.cx, fimSala.cy));
   }
-  const nMon = Math.min(12, 3 + andar + (inercia >= 7 ? 2 : 0) + ri(0, 2));
-  const pl = pool.length ? pool : poolCatacumbas(nivel, andar);
-  for (let i = 0; i < nMon; i++) {
+  const nPacks = Math.min(8, 3 + Math.ceil(andar / 2) + (inercia >= 7 ? 1 : 0) + ri(0, 1));
+  const pl = pool.length ? pool : poolCatacumbas(nivel, andar, tema, explorador); const esc = escala || escalaNivel(nivel);
+  const vizinho = (p) => { for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [0, 2]]) { const x = p.x + dx, y = p.y + dy; const i = idx(x, y); if (x > 0 && y > 0 && x < w - 1 && y < h - 1 && !ocupado.has(i) && tiles[i] === T.CHAO) { ocupado.add(i); return { x, y }; } } return null; };
+  for (let k = 0; k < nPacks; k++) {
     const sala = escolhe(rng, salas.filter((r) => r !== ini)); const p = livre(sala); if (!p) continue;
-    const id = escolhe(rng, pl); const [eh, ed] = escalaNivel(nivel); const mon = criarMonstro(id, { inercia, ciclo, esc: eh * (1 + andar * 0.04), ov: { dm: ed * Math.sqrt(ajuste) } });
-    ents.push({ tipo: 'monstro', x: p.x, y: p.y, mon, spr: mon.spr, pal: mon.pal, acordado: false, vivo: true, ouro: ouroDoMonstro(mon, rng) });
+    const n = tamanhoGrupo(rng, nivel, andar); const gm = criarGrupo({ pool: pl, n, escala: esc, aj: ajuste, inercia, ciclo, rng, bonus: 1 + andar * 0.04 });
+    gm.forEach((mon, j) => { const q = j === 0 ? p : vizinho(p); if (!q) return; ents.push({ tipo: 'monstro', x: q.x, y: q.y, mon, spr: mon.spr, pal: mon.pal, ap: mon.ap || null, acordado: false, vivo: true, ouro: ouroDoMonstro(mon, rng), g: k + 1 }); });
   }
   const nBau = ri(1, 3); for (let i = 0; i < nBau; i++) { const p = livre(escolhe(rng, salas)); if (p) ents.push({ tipo: 'bau', x: p.x, y: p.y, aberto: false, forca: Math.floor(andar / 2) }); }
   const nArm = ri(0, 3); for (let i = 0; i < nArm; i++) { const p = livre(escolhe(rng, salas)); if (p) ents.push({ tipo: 'armadilha', x: p.x, y: p.y, ativa: true, oculta: true }); }

@@ -1,8 +1,10 @@
 // Ponto de entrada: monta a interface, o motor do jogo e registra o service worker.
 import { iniciarJogo } from './game.js';
 import { instalarUi, montarTitulo } from './ui.js';
+import { precarregarHeroi } from './tokens.js';
 
 function iniciar() {
+  precarregarHeroi();
   instalarUi();
   iniciarJogo(document.getElementById('tela'));
   montarTitulo();

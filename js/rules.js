@@ -1,5 +1,8 @@
 // Regras puras: XP, níveis, ranks por PR, atributos, nutrição, missões, loot. Sem DOM.
 import { CLASSES, ITENS, MONSTROS, ATRIBUTOS, rolar, d20, recursosMax } from './srd.js';
+import { AJUSTE_SRD } from './dados/ajuste_srd.js';
+import * as Eco from './economia.js';
+import { RACAS } from './cosmeticos.js';
 import { LIFTS, TIERS, MISSOES, EVENTOS, GRUPOS_TREINO, RARIDADES } from './conteudo.js';
 import { CAPITULOS } from './story.js';
 
@@ -61,6 +64,7 @@ export function progressosAtributo(s) {
 export function atributos(s) {
   const cls = CLASSES[s.heroi.cls]; const pr = progressosAtributo(s); const out = {};
   for (const a of ATRIBUTOS) out[a] = clamp(9 + Math.round(12 * pr[a]) + (cls.prim === a ? 4 : 0) + (cls.sec === a ? 2 : 0), 8, 20);
+  const raca = RACAS[(s.heroi.ap && s.heroi.ap.raca) || 'humano'] || RACAS.humano; for (const a of ATRIBUTOS) out[a] = Math.min(22, out[a] + ((raca.bonus || {})[a] || 0));
   for (const slot of ['ac1', 'ac2']) { const it = ITENS[s.equip[slot]]; if (it && it.minAtr) for (const [a, v] of Object.entries(it.minAtr)) out[a] = Math.max(out[a], v); }
   if (s.heroi.cls === 'barbaro' && s.heroi.nivel >= 20) { out.FOR = Math.min(24, out.FOR + 4); out.CON = Math.min(24, out.CON + 4); }
   return out;
@@ -87,7 +91,7 @@ export function derivar(s) {
   let ini = M.DES; for (const slot of ['ac1', 'ac2']) { const it = ITENS[s.equip[slot]]; if (it && it.ini) ini += it.ini; }
   const atrArma = arma.dist ? M.DES : arma.acu ? Math.max(M.FOR, M.DES) : M.FOR;
   const conj = cls.conj; const modConj = conj ? M[conj] : 0;
-  let bonusMagia = 0; if (arma.bonusMagia) bonusMagia = arma.bonusMagia;
+  let bonusMagia = 0; if (arma.bonusMagia) bonusMagia = arma.bonusMagia; for (const slot of ['ac1', 'ac2']) { const it = ITENS[s.equip[slot]]; if (it && it.bonusMagia) bonusMagia += it.bonusMagia; }
   let ataques = 1;
   if (h.cls === 'guerreiro') ataques = L >= 20 ? 4 : L >= 11 ? 3 : L >= 5 ? 2 : 1;
   else if (h.cls === 'barbaro' || h.cls === 'paladino') ataques = L >= 5 ? 2 : 1;
@@ -139,9 +143,9 @@ export function gerarMissoes(s, data) {
     const v = m.vals[Math.floor(rng() * m.vals.length)];
     let alvo = m.alvo || v, arg = null, txt;
     if (m.id === 'lift') { arg = v; txt = m.txt(v, s, nomes); } else txt = m.txt(v);
-    if (descanso && pilar === 'corpo') { return { id: 'descanso', pilar, txt: 'Dia de descanso: caminhe 15 min ou alongue (opcional)', alvo: 15, arg: null, xp: 40, ouro: 6, prog: 0, feito: false, fim: false, tipoProg: 'cardio' }; }
+    if (descanso && pilar === 'corpo') { return { id: 'descanso', pilar, txt: 'Dia de descanso: caminhe 15 min ou alongue (opcional)', alvo: 15, arg: null, xp: 40, ouro: Eco.ouroMissao(L, 0.4), prog: 0, feito: false, fim: false, tipoProg: 'cardio' }; }
     const mult = 1 + Math.min(0.5, (L - 1) * 0.02);
-    return { id: m.id, pilar, txt, alvo, arg, xp: Math.round(m.xp(v) * mult), ouro: Math.round(m.ouro(v) * mult), prog: 0, feito: false, fim: !!m.fim };
+    return { id: m.id, pilar, txt, alvo, arg, xp: Math.round(m.xp(v) * mult), ouro: Eco.ouroMissao(L, 0.8 + Math.min(0.5, m.xp(v) / 120)), prog: 0, feito: false, fim: !!m.fim };
   };
   return ['corpo', 'mente', 'alma'].map(pickPilar);
 }
@@ -161,10 +165,10 @@ export function itensPorRaridade(rar, nivel, tipos) {
   return Object.values(ITENS).filter((i) => i.preco > 0 && RARIDADES.indexOf(i.raro) === rar && i.nvLoja <= nivel + 3 && (!tipos || tipos.includes(i.tipo)));
 }
 // Fator de dano dos chefes por classe (calibrado por tools/tuneclasse.mjs para ~62% de vitória média em todas).
-export const AJUSTE_CLASSE = { guerreiro: 1.05, barbaro: 1.07, ladino: 0.85, mago: 0.4, clerigo: 1.2, paladino: 1.52 };
+export const AJUSTE_CLASSE = {guerreiro:1.09,barbaro:1.15,ladino:0.95,mago:0.44,clerigo:1.06,paladino:1.52};
 // Itens que podem cair de baús: os da loja (até nível+3) e, mais tarde, relíquias que não são vendidas.
 export function itensDeBau(rar, nivel) {
-  return Object.values(ITENS).filter((i) => RARIDADES.indexOf(i.raro) === rar && ((i.preco > 0 && i.nvLoja <= nivel + 3) || (i.preco <= 0 && i.nvLoja >= 99 && nivel >= (rar >= 4 ? 12 : 6))));
+  return Object.values(ITENS).filter((i) => i.tipo !== 'tesouro' && RARIDADES.indexOf(i.raro) === rar && ((i.preco > 0 && i.nvLoja <= nivel + 3) || (i.preco <= 0 && i.nvLoja >= 99 && nivel >= (rar >= 4 ? 12 : 6))));
 }
 const possuiItem = (s, id) => (s.inv || []).some((x) => x.id === id) || Object.values(s.equip || {}).includes(id);
 // Sorteia um item pela raridade; se a faixa tiver poucas opções, mistura com a de baixo (e evita repetir relíquias que já são suas).
@@ -183,7 +187,7 @@ export function rolarBau(s, rng, { forca = 0, bonus = 0, origem = 'bau' } = {}) 
   const total = dado + forca + bonus + seq;
   let rar = raridadePorRolagem(total); if (dado === 1 && rar > 0) rar = Math.max(0, rar - 1);
   if (dado === 20) rar = 4;
-  const ouroBase = Math.round((6 + L * 4) * (1 + rar * 1.1) * (0.7 + rng() * 0.6));
+  const ouroBase = Eco.ouroBau(L, rar, rng);
   const itens = [];
   if (rar >= 1 || rng() < 0.35) { const it = sortearItemBau(s, rng, rar, L); if (it) itens.push(it.id); }
   if (rar >= 3) { let pot = itensPorRaridade(Math.min(3, rar - 1), L, ['consumivel']); if (!pot.length) pot = itensPorRaridade(1, L, ['consumivel']); if (pot.length) itens.push(escolhe(rng, pot).id); }
@@ -194,9 +198,10 @@ export function rolarBau(s, rng, { forca = 0, bonus = 0, origem = 'bau' } = {}) 
 // ---------- Loja ----------
 export function estoqueLoja(s, loja, data) {
   const L = s.heroi.nivel; const rng = rngDe(`${data}:${loja}:${s.criado}`);
-  const tipos = { ferreiro: ['arma', 'armadura', 'escudo'], alquimista: ['consumivel'], mercador: ['acessorio', 'arma', 'armadura', 'escudo', 'consumivel'] }[loja];
+  const tipos = { ferreiro: ['arma', 'armadura', 'escudo'], alquimista: ['consumivel'], mercador: ['acessorio', 'arma', 'armadura', 'escudo', 'consumivel', 'tesouro'] }[loja];
   let pool = Object.values(ITENS).filter((i) => i.preco > 0 && tipos.includes(i.tipo) && i.nvLoja <= L + (loja === 'mercador' ? 4 : 1) && i.nvLoja >= (loja === 'mercador' ? Math.max(1, L - 8) : 1));
   if (loja === 'ferreiro') { pool = pool.filter((i) => i.mag === 0 || i.nvLoja <= L); }
+  if (loja === 'mercador') pool = pool.filter((i) => i.tipo !== 'tesouro' || (!i.magico && i.nvLoja <= 2));
   if (loja === 'alquimista') return pool.map((i) => i.id);
   const n = loja === 'mercador' ? 8 : 12; const ids = pool.map((i) => i.id); const out = [];
   while (out.length < Math.min(n, ids.length)) { const id = escolhe(rng, ids); if (!out.includes(id)) out.push(id); }
@@ -212,24 +217,29 @@ export function criarMonstro(id, { chefe = false, ov = null, nome = null, esc = 
   const b = JSON.parse(JSON.stringify(MONSTROS[id]));
   if (ov) Object.assign(b, ov);
   const f = 1 + 0.12 * (ciclo - 1) + (inercia >= 10 ? 0.25 : inercia >= 7 ? 0.1 : 0);
-  const hp = Math.round(b.hp * esc * f);
-  return { ...b, id, n: nome || b.n, hp, hpMax: hp, dm: (ov && ov.dm) || b.dm || 1, chefe: chefe || !!b.chefe, conds: {}, sopro: true, rodada: 0 };
+  const kSrd = globalThis.__SEM_AJUSTE ? 1 : (AJUSTE_SRD[id.replace(/^s_/, '')] ?? 1);
+  const hp = Math.max(1, Math.round(b.hp * esc * f * kSrd));
+  return { ...b, id, n: nome || b.n, hp, hpMax: hp, dm: ((ov && ov.dm) || b.dm || 1) * kSrd, chefe: chefe || !!b.chefe, conds: {}, sopro: true, rodada: 0 };
 }
 export function poolDoCapitulo(cap) {
   const L = cap.n, hi = L * 0.62 + 0.4, lo = L * 0.2; let p = cap.pool.filter((id) => MONSTROS[id].cr <= hi && MONSTROS[id].cr >= lo);
   if (!p.length) p = cap.pool.filter((id) => MONSTROS[id].cr <= hi); if (!p.length) p = [cap.pool.slice().sort((a, b) => MONSTROS[a].cr - MONSTROS[b].cr)[0]];
-  return p;
+  // variedade do bestiário SRD: até 8 criaturas do tema do capítulo, escolhidas de forma determinística
+  const ex = Object.values(MONSTROS).filter((m) => m.srd && !m.inv && !m.chefe && m.tp !== 'custom' && m.cr <= hi && m.cr >= lo && (m.tags || []).includes(cap.tema)).sort((a, b) => (hash32(a.id + cap.n) - hash32(b.id + cap.n))).slice(0, 8).map((m) => m.id);
+  return [...new Set([...p, ...ex])];
 }
-export function poolCatacumbas(L, andar) {
-  const E = clamp(L + Math.floor(andar / 4), 1, 24); const lo = E * 0.2, hi = E * 0.62 + 0.4;
-  let pool = Object.values(MONSTROS).filter((m) => !m.chefe && m.cr >= lo && m.cr <= hi && m.cr <= 17);
+const hash32 = (str) => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+export function poolCatacumbas(L, andar, tema, explorador = false) {
+  const E = explorador ? clamp(L + Math.floor(andar / 2), 1, 48) : clamp(L + Math.floor(andar / 4), 1, 24); const lo = E * 0.2, hi = E * 0.62 + 0.4;
+  let pool = Object.values(MONSTROS).filter((m) => !m.chefe && !m.inv && m.tp !== 'custom' && m.cr >= lo && m.cr <= hi && m.cr <= (explorador ? 30 : 17));
+  if (tema) { const t = pool.filter((m) => (m.tags || []).includes(tema)); if (t.length >= 4) pool = t; }
   if (!pool.length) pool = [MONSTROS.rato];
   return pool.map((m) => m.id);
 }
 // Escala dos monstros comuns por nível (PV, dano) — calibrada por simulação (tools/tune.mjs)
-export const ESCALA_N = [[1, .45], [.8, .42], [.6, .45], [.8, .55], [1, .85], [1, .85], [1, .95], [1, 1.3], [1, 1.7], [1.05, 2], [1.2, 2.2], [1.4, 2.2], [1.7, 2.2], [1.9, 2.2], [2.2, 2.2], [1.8, 2.2], [2, 2.2], [2.05, 2.2], [2.2, 2.2], [2.5, 2.2]];
+export const ESCALA_N = [[0.6,0.5],[0.6,0.5],[0.6,0.5],[0.6,0.61],[0.8,0.67],[1.0,0.75],[1.0,0.75],[1.0,1.08],[1.0,1.42],[1.03,1.82],[1.16,2.03],[1.4,2.2],[1.64,2.2],[2.2,2.2],[1.97,2.14],[1.91,2.14],[1.45,2.14],[1.69,2.2],[1.93,2.2],[2.04,2.2]];
 export const escalaNivel = (L) => ESCALA_N[clamp(Math.round(L), 1, 20) - 1];
-export function ouroDoMonstro(m, rng) { const base = m.cr < 1 ? 4 : m.cr * 9; return Math.round(base * (0.6 + rng() * 0.9) * (m.chefe ? 4 : 1)); }
+export function ouroDoMonstro(m, rng) { return Eco.ouroMonstro(m, rng); }
 
 // Capítulo atual útil
 export const capitulo = (n) => CAPITULOS[n - 1];

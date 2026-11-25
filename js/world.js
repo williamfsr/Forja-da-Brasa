@@ -50,7 +50,7 @@ export function criarVila() {
   poe(m, 7, 19, 'bigorna'); poe(m, 8, 19, 'bigorna');
   for (let y = 21; y <= 25; y++) for (let x = 22; x <= 27; x++) poe(m, x, y, (x + y) % 7 === 0 && x > 22 ? 'flor' : 'agua');
   for (let x = 22; x <= 27; x++) poe(m, x, 20, 'cerca');
-  for (const [x, y] of [[9, 3], [10, 8], [21, 2], [8, 26], [12, 22], [18, 22], [10, 24], [19, 26], [6, 27], [3, 26]]) poe(m, x, y, 'arvore');
+  for (const [x, y] of [[10, 8], [21, 2], [8, 26], [12, 22], [18, 22], [10, 24], [19, 26], [6, 27], [3, 26]]) poe(m, x, y, 'arvore');
   for (let x = 16; x <= 21; x++) poe(m, x, 7, 'cerca'); poe(m, 16, 7, 'cerca');
   m.spawn = { x: 14, y: 26 }; m.retornoPortal = { x: 14, y: 3 };
   m.npcs = [

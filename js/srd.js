@@ -1,3 +1,6 @@
+import { MONSTROS_SRD } from './dados/monstros_srd.js';
+import { aplicarPrecos } from './economia.js';
+import { ITENS_SRD } from './dados/itens_srd.js';
 // Dados de regras baseados no SRD 5.1 (CC-BY-4.0, Wizards of the Coast) com a terminologia pt-BR
 // do módulo "Translation: Português (Brasil) [D&D 5E](SRD)". Valores adaptados para o jogo solo.
 
@@ -141,6 +144,11 @@ export const MAGIAS = {
   explosao_solar: { nome: 'Explosão Solar', nv: 8, tipo: 'salva', atr: 'CON', dado: '12d6', dano: 'radiante', metade: true, cls: ['mago', 'clerigo'], desc: 'Luz solar abrasadora.' },
   chuva_meteoros: { nome: 'Chuva de Meteoros', nv: 9, tipo: 'salva', atr: 'DES', dado: '20d6+20d6', dano: 'fogo', metade: true, cls: ['mago'], desc: 'Esferas de fogo caem do céu.' },
   palavra_matar: { nome: 'Palavra de Poder: Matar', nv: 9, tipo: 'matar', limite: 100, cls: ['mago'], desc: 'Mata alvo com 100 PV ou menos.' },
+  // Encantamento e diplomacia (usadas em combates com inimigos racionais)
+  encantar: { nome: 'Enfeitiçar Pessoa', nv: 1, tipo: 'encanto', cls: ['mago'], desc: 'Um humanoide (SAB) passa a lutar ao seu lado até ser ferido por você. Falha o teste = ele só fica furioso.' },
+  acalmar: { nome: 'Acalmar Emoções', nv: 2, tipo: 'acalmar', cls: ['clerigo'], desc: 'Área: quem falhar em CAR baixa as armas por 3 rodadas e fica mais aberto à conversa.' },
+  medo: { nome: 'Medo', nv: 3, tipo: 'medo', cls: ['mago'], desc: 'Cone: quem falhar em SAB foge aterrorizado por 3 rodadas.' },
+  dominar: { nome: 'Dominar Pessoa', nv: 5, tipo: 'encanto', cls: ['mago'], desc: 'Um humanoide (SAB) é dominado e vira seu companheiro permanente.' },
   // Clérigo / Paladino
   curar: { nome: 'Curar Ferimentos', nv: 1, tipo: 'cura', dado: '1d8', up: '1d8', cls: ['clerigo', 'paladino'], desc: 'Cura 1d8 + modificador.' },
   palavra_cur: { nome: 'Palavra Curativa', nv: 1, tipo: 'cura', dado: '1d4', up: '1d4', bonus: true, cls: ['clerigo'], desc: 'Ação bônus: cura 1d4 + modificador.' },
@@ -209,6 +217,8 @@ Object.assign(ITENS, {
   // relíquias de história
   lamina_brasa: { id: 'lamina_brasa', nome: 'Lâmina da Brasa', tipo: 'arma', dado: '1d8', acu: false, dist: false, duas: false, mag: 1, extra: { dado: '1d6', dano: 'fogo' }, preco: 0, raro: 'raro', nvLoja: 99, desc: 'Espada longa forjada na Forja Primeva.' },
   lamina_solar: { id: 'lamina_solar', nome: 'Lâmina Solar', tipo: 'arma', dado: '1d8', acu: true, dist: false, duas: false, mag: 2, extra: { dado: '1d8', dano: 'radiante' }, preco: 0, raro: 'lendário', nvLoja: 99, desc: 'Lâmina de luz do sol.' },
+  simbolo_alvorecer: { id: 'simbolo_alvorecer', nome: 'Símbolo do Alvorecer', tipo: 'acessorio', ca: 1, ini: 1, regen: 2, preco: 0, raro: 'lendário', nvLoja: 99, ic: 'simbolo', desc: 'Disco de cobre que esquenta a cada manhã. +1 CA, +1 iniciativa, regenera 2 PV por rodada.' },
+  diario_nhor: { id: 'diario_nhor', nome: 'Diário de Nhor', tipo: 'acessorio', ini: 3, bonusMagia: 1, preco: 0, raro: 'lendário', nvLoja: 99, ic: 'livro', desc: 'O caderno do Rei. +3 iniciativa, +1 CD/ataque de magia. Nhor-Kaal luta mais fraco diante de quem o leu.' },
   cajado_poder: { id: 'cajado_poder', nome: 'Cajado do Poder', tipo: 'arma', dado: '1d6', acu: false, dist: false, duas: false, mag: 2, bonusMagia: 2, preco: 0, raro: 'lendário', nvLoja: 99, desc: '+2 CD e ataque de magia.' },
   maca_disrupcao: { id: 'maca_disrupcao', nome: 'Maça da Disrupção', tipo: 'arma', dado: '1d6', acu: false, dist: false, duas: false, mag: 2, extra: { dado: '2d6', dano: 'radiante' }, bonusMagia: 1, preco: 0, raro: 'lendário', nvLoja: 99, desc: 'Brilha com a luz do dia.' },
   couro_lobo: { id: 'couro_lobo', nome: 'Couro do Lobo Cinzento', tipo: 'armadura', base: 12, dexMax: 99, arm: 1, cat: 'leve', mag: 1, preco: 0, raro: 'raro', nvLoja: 99, desc: 'Armadura de couro +1' },
@@ -226,6 +236,15 @@ Object.assign(ITENS, {
   escudoSeq: { id: 'escudoSeq', nome: 'Escudo de Sequência', tipo: 'consumivel', escudoSeq: true, preco: 300, raro: 'raro', nvLoja: 1, desc: 'Protege sua sequência de 1 dia perdido (usar fora da masmorra).' },
   amuletoCura: { id: 'amuletoCura', nome: 'Talismã de Inspiração', tipo: 'consumivel', insp: true, preco: 500, raro: 'raro', nvLoja: 3, desc: 'Concede Inspiração (vantagem em 1 ataque).' },
 });
+
+// ---------- Itens do SRD 5.1 (importados por tools/dados/importar_itens.py) ----------
+const CAMPOS_ITEM = ['dado', 'dt', 'acu', 'dist', 'duas', 'vers', 'alc', 'thr', 'pesada', 'extra', 'contra', 'vicioso', 'cat', 'base', 'dexMax', 'arm', 'ca', 'forca', 'furtivo', 'cura', 'dano', 'danoTipo', 'alvoTp', 'ini', 'regen', 'minAtr', 'bonusMagia', 'nvMagia', 'magico'];
+for (const r of ITENS_SRD) {
+  if (ITENS[r.id]) continue; const it = { id: r.id, nome: r.n, en: r.en, tipo: r.tp, preco: r.p, raro: r.r, nvLoja: r.nv, peso: r.w, desc: r.d, ic: r.ic, srd: 1, mag: r.mag || 0 };
+  for (const k of CAMPOS_ITEM) if (r[k] !== undefined) it[k] = r[k];
+  if (it.tipo === 'arma') { it.acu = !!it.acu; it.dist = !!it.dist; it.duas = !!it.duas; }
+  ITENS[r.id] = it;
+}
 
 // ---------- Monstros (SRD 5.1) ----------
 // atq: [nome, bônus, dano, tipo]
@@ -283,6 +302,19 @@ export const MONSTROS = {
   dragaoAdulto: { n: 'Dragão Vermelho Adulto', cr: 17, hp: 256, ca: 19, spr: 'dragao', pal: { d: '#d03a1a', D: '#6a1008' }, atq: [A('Mordida', 14, '2d10+8'), A('Garras', 14, '2d6+8'), A('Garras', 14, '2d6+8')], esp: { sopro: { n: 'Sopro de Fogo', dc: 21, atr: 'DES', d: '18d6', t: 'fogo' } }, tags: ['dragao', 'trono'] },
   reiInercia: { n: 'Nhor-Kaal, Rei da Inércia', cr: 21, hp: 330, ca: 19, spr: 'rei', atq: [A('Toque Gélido', 13, '4d8+6', 'necrótico'), A('Toque Gélido', 13, '4d8+6', 'necrótico'), A('Mão Imóvel', 13, '2d10+6', 'necrótico')], esp: { letargia: { dc: 18 }, inercia: { dc: 19, cada: 3 }, regen: 6 }, tags: ['morto', 'trono'], chefe: true },
 };
+
+// ---------- Bestiário completo do SRD 5.1 (340 criaturas, importadas por tools/dados/importar_monstros.py) ----------
+const SPR_NOME = [[/spider/, 'aranha'], [/\brat\b|rats/, 'rato'], [/\bbat\b|bats/, 'morcego'], [/wolf|dog|hound|jackal|hyena|worg|panther|lion|tiger|cat\b|bear/, 'lobo'], [/skeleton/, 'esqueleto'], [/zombie|ghoul|ghast|mummy|wight/, 'zumbi'],
+  [/ghost|specter|wraith|shadow|banshee|spirit|poltergeist/, 'fantasma'], [/goblin|kobold|imp\b|quasit|gnome|halfling/, 'goblin'], [/snake|serpent|naga|basilisk|wyvern|lizard|crocodile|dinosaur/, 'serpe'], [/gargoyle/, 'gargula'],
+  [/golem|animated|construct|guardian|homunculus|armor/, 'golem'], [/ooze|pudding|jelly|slime|cube|blob/, 'limo'], [/dragon|wyrmling|drake/, 'dragao'], [/vampire|lich|nightmare|balor|demon|devil|fiend|vrock|hezrou|nalfeshnee|marilith|glabrezu|succubus|incubus/, 'vampiro'],
+  [/orc|ogre|troll|giant|bugbear|ettin|gnoll|minotaur|hobgoblin|yeti|oni|cyclops|owlbear|rhinoceros|elephant|mammoth|ape|gorilla/, 'bruto']];
+const SPR_TIPO = { humanoide: 'humano', fera: 'lobo', dragao: 'dragao', morto: 'esqueleto', limo: 'limo', infero: 'vampiro', constructo: 'golem', gigante: 'bruto', monstro: 'bruto', elemental: 'fantasma', celestial: 'humano', feerico: 'humano', planta: 'bruto', aberracao: 'limo' };
+for (const [id, m] of Object.entries(MONSTROS_SRD)) {
+  if (MONSTROS[id]) continue;
+  const en = (m.en || '').toLowerCase(); const hit = SPR_NOME.find(([re]) => re.test(en));
+  MONSTROS[id] = { ...m, id, spr: hit ? hit[1] : (SPR_TIPO[m.tp] || 'humano'), tok: id, srd: 1 };
+}
+aplicarPrecos(ITENS);
 // Corrige chave com acento (compatibilidade)
 MONSTROS.manticora = MONSTROS['mantícora']; delete MONSTROS['mantícora'];
 for (const [id, m] of Object.entries(MONSTROS)) m.id = id;

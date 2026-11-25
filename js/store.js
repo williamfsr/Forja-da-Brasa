@@ -3,6 +3,9 @@ import { CLASSES, ITENS, recursosMax, recursosComFator, rolar, d20 } from './srd
 import { LIFTS, GRUPOS_TREINO, AERO, INTENSIDADES, ESTUDO_TIPOS, CONQUISTAS, EVENTOS, MISSOES, CAPAS } from './conteudo.js';
 import { CAPITULOS, ATOS, finalPorMoral } from './story.js';
 import * as R from './rules.js';
+import { apPadrao } from './cosmeticos.js';
+import { precoVenda } from './economia.js';
+import * as Camp from './campanha.js';
 
 export const KEY = 'forja.save.v1';
 export const fila = []; // popups a exibir (recompensas, level-ups...)
@@ -16,11 +19,12 @@ const hoje = () => R.dataStr();
 export { hoje };
 
 // ---------- criação e persistência ----------
-export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', peso = 75, altura = 175, idade = 30, kcalAlvo = 2200 } = {}) {
+export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', peso = 75, altura = 175, idade = 30, kcalAlvo = 2200, ap = null } = {}) {
   const c = CLASSES[cls];
   const s = {
     v: 1, criado: Date.now(),
-    heroi: { nome, cls, sexo, peso, altura, idade, kcalAlvo, nivel: 1, xp: 0, hp: null, ouro: 60, tochas: 3, exaustao: 0, insp: 0, sono: false, capa: 'padrao', capas: ['padrao'], paragon: 0 },
+    heroi: { nome, cls, sexo, peso, altura, idade, kcalAlvo, nivel: 1, xp: 0, hp: null, ouro: 60, tochas: 3, exaustao: 0, insp: 0, sono: false, capa: 'padrao', capas: ['padrao'], paragon: 0, ap: ap || apPadrao(cls) },
+    companheiros: [], npcs: {},
     recursos: { slots: [], cont: {} }, recursosMax: { slots: [], cont: {} },
     inv: [{ id: 'pocao1', n: 2 }], equip: { arma: c.inicio.arma, armadura: c.inicio.armadura, escudo: c.inicio.escudo, ac1: null, ac2: null },
     treino: {}, extras: [], habitos: [], provas: [],
@@ -28,7 +32,7 @@ export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', 
     dias: {}, diario: { data: hoje(), missoes: [], evento: null, loot: 0 },
     sequencia: { atual: 0, melhor: 0, escudos: 0, ultimaAtiv: null, voltaBonus: 0 },
     historia: { cap: 1, limpos: [], flags: {}, moral: 50, inercia: 2, decisoes: {}, checkpoint: {}, ciclo: 1, prologo: false, vistos: {}, final: null },
-    catacumbas: { melhor: 0 },
+    catacumbas: { melhor: 0 }, campanha: Camp.novoEstado(),
     conquistas: {}, cfg: { som: true, vibra: true, musica: false, descanso: [0], textoGrande: false },
     timers: {}, relatorio: null, run: null, log: [], inicio: hoje(),
   };
@@ -36,10 +40,10 @@ export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', 
   s.diario.missoes = R.gerarMissoes(s, s.diario.data); s.diario.evento = R.gerarEvento(s, s.diario.data);
   return s;
 }
-export function novoJogo(cfg) { S = estadoInicial(cfg); const d = R.derivar(S); S.heroi.hp = d.hpMax; salvar(); bus.emit('mudou'); return S; }
+export function novoJogo(cfg) { S = estadoInicial(cfg); const d = R.derivar(S); S.heroi.hp = d.hpMax; iniciarCampanha(true); salvar(); bus.emit('mudou'); return S; }
 export function salvar() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* armazenamento cheio/bloqueado */ } }
 export function carregar() {
-  try { const t = localStorage.getItem(KEY); if (!t) return null; S = migrar(JSON.parse(t)); return S; } catch (e) { return null; }
+  try { const t = localStorage.getItem(KEY); if (!t) return null; S = migrar(JSON.parse(t)); iniciarCampanha(); return S; } catch (e) { return null; }
 }
 function migrar(s) {
   const base = estadoInicial({ cls: s.heroi.cls });
@@ -52,7 +56,41 @@ export function importar(txt) { const o = JSON.parse(txt); if (!o || !o.heroi ||
 export function snapshot() { ultimoSnap = JSON.stringify(S); }
 export function podeDesfazer() { return !!ultimoSnap; }
 export function desfazer() { if (!ultimoSnap) return false; S = JSON.parse(ultimoSnap); ultimoSnap = null; salvar(); bus.emit('mudou'); return true; }
-const salvaEmite = () => { salvar(); bus.emit('mudou'); };
+let avaliandoCamp = false;
+const salvaEmite = () => {
+  if (!avaliandoCamp && S && S.campanha) { avaliandoCamp = true; try { anunciarLote(Camp.avaliar(S, ganchosCamp)); } finally { avaliandoCamp = false; } }
+  salvar(); bus.emit('mudou');
+};
+// ---------- campanha: ganchos e anúncios ----------
+const ganchosCamp = {
+  ganharOuro: (n) => ganharOuro(n), invAdd: (id, n) => invAdd(id, n),
+  lerBaralho: () => Camp.lerBaralho(S, R.rngDe(`baralho:${S.criado}:${S.historia.ciclo}`)),
+  recrutar: (id) => {
+    const a = Camp.ALIADOS[id]; if (!a) return; const c = { mon: a.mon, nome: a.nome, ap: Object.assign(apPadrao(a.cls, a.raca), { cabelo: 3 }), frase: a.frase, tags: ['aliado'], aliadoId: id };
+    S.companheiros = S.companheiros.filter((x) => x.aliadoId !== id); if (S.companheiros.length >= 2) S.companheiros.shift(); S.companheiros.push(c);
+  },
+};
+function anunciarLote(ev) {
+  const novas = ev.filter((e) => e.t === 'nova');
+  if (novas.length > 2) { pop({ tipo: 'texto', titulo: `${novas.length} novas missões`, txt: novas.map((e) => '• ' + e.q.titulo).join('\n') + '\n\nVeja tudo no Diário (menu).', cor: '#ffd24a' }); ev = ev.filter((e) => e.t !== 'nova'); }
+  for (const e of ev) anunciarCamp(e);
+}
+// Ativa as primeiras missões (jogo novo) ou as que um save antigo já pode ter; chamado ao criar e ao carregar.
+export function iniciarCampanha(silencioso = false) {
+  if (!S || !S.campanha || avaliandoCamp) return; avaliandoCamp = true;
+  try { const ev = Camp.avaliar(S, ganchosCamp); if (!silencioso) anunciarLote(ev); else for (const e of ev) if (e.t === 'fim') logar(`Missão concluída: ${e.q.titulo}.`); } finally { avaliandoCamp = false; }
+  salvar();
+}
+function anunciarCamp(e) {
+  const nome = (id) => (Camp.PERSONAGENS[id] ? Camp.PERSONAGENS[id].nome : '');
+  if (e.t === 'nova') pop({ tipo: 'texto', titulo: (e.q.tipo === 'principal' ? 'Missão: ' : 'Missão secundária: ') + e.q.titulo, txt: `${nome(e.q.npc)} — ${e.q.resumo}`, cor: '#ffd24a' });
+  else if (e.t === 'passo') pop({ tipo: 'texto', titulo: `${e.q.titulo}: etapa cumprida`, txt: e.fala, cor: '#6fcf7f' });
+  else if (e.t === 'fim') { logar(`Missão concluída: ${e.q.titulo}.`); pop({ tipo: 'texto', titulo: 'Missão concluída!', txt: `${e.q.titulo}. Recompensas entregues.`, cor: '#ff9f40' }); }
+  else if (e.t === 'lore') pop({ tipo: 'texto', titulo: `Diário de Nhor: ${e.p.t}`, txt: e.p.txt, cor: '#b49bff' });
+  else if (e.t === 'leitura') pop({ tipo: 'texto', titulo: 'O Baralho do Hábito fala', txt: `Safira vira quatro cartas.\n☀ ${Camp.RELIQUIAS.sol.carta}: ${Camp.SITIOS[e.L.sol].dica}\n✦ ${Camp.RELIQUIAS.simbolo.carta}: ${Camp.SITIOS[e.L.simbolo].dica}\n📖 ${Camp.RELIQUIAS.diario.carta}: ${Camp.SITIOS[e.L.diario].dica}\n♟ ${Camp.ALIADOS[e.L.aliado].carta}: ${Camp.ALIADOS[e.L.aliado].dica}\n(Detalhes no Diário.)`, cor: '#9ad0ff' });
+  else if (e.t === 'reliquia') pop({ tipo: 'texto', titulo: `Relíquia: ${e.r.nome}`, txt: e.r.txt, cor: '#ffd24a' });
+  else if (e.t === 'aliado') pop({ tipo: 'texto', titulo: `${e.a.nome} se junta a você`, txt: `"${e.a.frase}"`, cor: '#9ad0ff' });
+}
 
 // ---------- dia atual ----------
 export function dia(d = hoje()) {
@@ -70,8 +108,10 @@ function multProva() { const hojeS = hoje(); return S.provas.some((p) => { const
 function multGeral() { return multSequencia() * (S.sequencia.voltaBonus > 0 ? 1.25 : 1) * modEvento('xp'); }
 
 // ---------- XP e níveis ----------
+// XP vem SOMENTE de treino, aeróbico, estudo, alimentação e hábitos/missões diárias. Combate, masmorras, chefes e eventos não dão XP.
+const ORIGENS_SEM_XP = new Set(['chefe', 'masmorra', 'combate', 'evento', 'historia']);
 export function ganharXp(base, origem, { mod = 1, semMult = false } = {}) {
-  if (base <= 0) return 0;
+  if (base <= 0 || ORIGENS_SEM_XP.has(origem)) return 0;
   const antes = S.heroi.nivel; const total = Math.round(base * mod * (semMult ? 1 : multGeral()));
   S.heroi.xp += total; dia().xp += total; bus.emit('xp', { n: total, origem });
   const novo = R.nivelPorXp(S.heroi.xp);
@@ -325,7 +365,7 @@ function ajustarHp() { const m = der().hpMax; if (S.heroi.hp > m) S.heroi.hp = m
 export function comprar(id, mod = 1) {
   const it = ITENS[id]; const p = R.precoItem(id, S, mod); if (S.heroi.ouro < p) return { erro: 'Ouro insuficiente.' }; snapshot(); S.heroi.ouro -= p; invAdd(id, 1); salvaEmite(); return { ok: true, p };
 }
-export function vender(id) { const it = ITENS[id]; if (!invQtd(id)) return { erro: 'Sem o item.' }; const p = Math.max(1, Math.round((it.preco || 10) * 0.4)); invDel(id, 1); ganharOuro(p); salvaEmite(); return { ok: true, p }; }
+export function vender(id) { const it = ITENS[id]; if (!invQtd(id)) return { erro: 'Sem o item.' }; const p = precoVenda(it); invDel(id, 1); ganharOuro(p); salvaEmite(); return { ok: true, p }; }
 export function usarForaDaMasmorra(id) {
   const it = ITENS[id]; if (!it || !invQtd(id)) return { erro: 'Sem o item.' };
   if (it.cura) { const n = rolar(it.cura).total; const m = der().hpMax; S.heroi.hp = Math.min(m, (S.heroi.hp ?? m) + n); invDel(id); salvaEmite(); return { msg: `Curou ${n} PV.` }; }
@@ -350,9 +390,15 @@ export function concluirCapitulo(n, escolha) {
   const rc = cap.recompensa || {}; if (rc.ouro) ganharOuro(rc.ouro); if (rc.item) invAdd(rc.item, 1); ganharXp(100 + n * 25, 'chefe', { semMult: true });
   if (cap.brasa) pop({ tipo: 'texto', titulo: cap.brasa, txt: 'Uma nova Brasa acende na Forja Primeva.', cor: '#ff9f40' });
   if (n === 20) { H.final = finalPorMoral(H.moral, H.inercia); }
+  for (const e of Camp.aoConcluirCapitulo(S, n, ganchosCamp)) anunciarCamp(e);
   delete H.checkpoint[n]; verificarConquistas(); salvaEmite();
 }
-export function novoCiclo() { const H = S.historia; H.ciclo++; H.limpos = []; H.checkpoint = {}; H.decisoes = {}; H.final = null; H.inercia = 3; salvaEmite(); }
+export function novoCiclo() {
+  const H = S.historia; H.ciclo++; H.limpos = []; H.checkpoint = {}; H.decisoes = {}; H.final = null; H.inercia = 3; H.cap = 1;
+  const C = S.campanha; C.q = {}; C.leitura = null; C.rel = {}; C.modo = 'campanha'; C.loops++; S.companheiros = S.companheiros.filter((c) => !c.aliadoId); salvaEmite();
+}
+// Fim de campanha: 'explorador' abre as catacumbas infinitas com tudo o que o herói conquistou.
+export function escolherModoFinal(modo) { const C = S.campanha; C.modo = modo === 'explorador' ? 'explorador' : 'campanha'; salvaEmite(); }
 export function marcarVisto(k) { S.historia.vistos[k] = true; salvar(); }
 
 // ---------- Masmorra ----------
@@ -360,7 +406,7 @@ export function tochaDisponivel() { return S.heroi.tochas > 0 && S.heroi.exausta
 export function gastarTocha() { if (!tochaDisponivel()) return false; S.heroi.tochas--; salvaEmite(); return true; }
 export function salvarBatalha(B) {
   const H = B.h; S.heroi.hp = Math.max(0, Math.min(H.hp, der().hpMax)); S.recursos.slots = H.slots; S.recursos.cont = H.cont; S.heroi.insp = H.insp;
-  for (const u of B.usados) invDel(u, 1); salvar(); bus.emit('mudou');
+  for (const u of B.usados.splice(0)) invDel(u, 1); salvar(); bus.emit('mudou');
 }
 export function derrotaNaMasmorra() {
   const r = S.run; const perdido = r ? r.ouroGanho : 0; S.heroi.hp = Math.max(1, Math.floor(der().hpMax * 0.25));

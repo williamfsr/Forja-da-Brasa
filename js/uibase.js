@@ -65,20 +65,36 @@ export async function confirmar(titulo, txt, sim = 'Sim', nao = 'Não') {
 }
 export const aviso = (titulo, txt, ok = 'OK') => popup(`<h2>${esc(titulo)}</h2><p>${txt}</p><button class="btn pri bloco" data-res="1">${esc(ok)}</button>`);
 
-// ---------- diálogos (caixa de texto estilo RPG) ----------
+// ---------- diálogos (caixa de texto estilo RPG, com retrato e opções) ----------
 let dlg = null;
 export const dialogoAberto = () => !!dlg;
-export function dialogo(nome, linhas) {
+function poeRetrato(ret) {
+  const box = $('#dialogo .dialogo-retrato'); box.innerHTML = ''; const cx = $('#dialogo .dialogo-caixa');
+  if (ret) { ret.className = 'ret'; box.append(ret); cx.classList.add('com-retrato'); } else cx.classList.remove('com-retrato');
+}
+export function dialogo(nome, linhas, opts = {}) {
   return new Promise((res) => {
-    dlg = { nome, linhas: linhas.slice(), i: 0, res, cheio: false, h: null }; $('#dialogo').classList.remove('oculto'); $('.dialogo-nome').textContent = nome; mostrarLinha();
-    $('#dialogo').onclick = () => dialogoAvancar();
+    dlg = { nome, linhas: linhas.slice(), i: 0, res, cheio: false, h: null }; poeRetrato(opts.retrato || null); $('#dialogo .dialogo-opcoes').innerHTML = '';
+    $('#dialogo').classList.remove('oculto'); $('.dialogo-nome').textContent = nome; $('.dialogo-seta').style.display = ''; mostrarLinha();
+    $('#dialogo').onclick = (e) => { if (e.target.closest('.dialogo-opcoes')) return; dialogoAvancar(); };
   });
 }
+// Mostra um texto e opções clicáveis; devolve o id da opção escolhida.
+export function dialogoEscolha({ nome, retrato = null, texto, opcoes }) {
+  return new Promise((res) => {
+    dlg = { nome, linhas: [texto], i: 0, res, cheio: false, h: null, escolha: true }; poeRetrato(retrato); $('#dialogo').classList.remove('oculto'); $('.dialogo-nome').textContent = nome; $('.dialogo-seta').style.display = 'none';
+    const box = $('#dialogo .dialogo-opcoes'); box.innerHTML = '';
+    opcoes.forEach((o) => { const b = document.createElement('button'); b.disabled = !!o.off; b.innerHTML = `<span>${esc(o.rot)}</span>${o.sub ? `<small>${esc(o.sub)}</small>` : ''}`; b.addEventListener('click', (e) => { e.stopPropagation(); if (!dlg) return; clearInterval(dlg.h); Au.sfx('select'); fecharDialogo(); res(o.id); }); box.append(b); });
+    $('#dialogo').onclick = () => dialogoAvancar(); mostrarLinha();
+  });
+}
+function fecharDialogo() { dlg = null; $('#dialogo').classList.add('oculto'); $('#dialogo').onclick = null; $('#dialogo .dialogo-opcoes').innerHTML = ''; poeRetrato(null); }
 function mostrarLinha() {
   const t = $('.dialogo-txt'); const txt = dlg.linhas[dlg.i]; let n = 0; dlg.cheio = false; t.textContent = ''; clearInterval(dlg.h);
   dlg.h = setInterval(() => { n += 2; t.textContent = txt.slice(0, n); if (n % 4 === 0) Au.sfx('select'); if (n >= txt.length) { clearInterval(dlg.h); dlg.cheio = true; t.textContent = txt; } }, 22);
 }
 export function dialogoAvancar() {
   if (!dlg) return; if (!dlg.cheio) { clearInterval(dlg.h); $('.dialogo-txt').textContent = dlg.linhas[dlg.i]; dlg.cheio = true; return; }
-  dlg.i++; if (dlg.i >= dlg.linhas.length) { const r = dlg.res; dlg = null; $('#dialogo').classList.add('oculto'); $('#dialogo').onclick = null; r(); return; } Au.sfx('select'); mostrarLinha();
+  if (dlg.escolha) return;
+  dlg.i++; if (dlg.i >= dlg.linhas.length) { const r = dlg.res; fecharDialogo(); r(); return; } Au.sfx('select'); mostrarLinha();
 }

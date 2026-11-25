@@ -8,6 +8,9 @@ export const S = () => St.S;
 export const tierTag = (t) => `<span class="tag" style="background:${TIER_COR[t]}">${esc(TIERS[t])}</span>`;
 export const escada = (tier) => `<div style="display:flex;gap:2px;margin:4px 0">${TIERS.map((n, i) => `<div title="${esc(n)}" style="flex:1;height:7px;border:1px solid #000;background:${i <= tier ? TIER_COR[i] : '#0a0812'}"></div>`).join('')}</div>`;
 export const barra = (a, b, cls = '') => `<div class="prog ${cls}"><i style="width:${pct(a, b).toFixed(1)}%"></i></div>`;
+const IC_TIPO = { arma: 'weapon', armadura: 'equipment', escudo: 'equipment', acessorio: 'equipment', consumivel: 'consumable', pocao: 'consumable', ferramenta: 'tool', tesouro: 'loot', pergaminho: 'consumable', bolsa: 'container' };
+// ícone (game-icons.net via dnd5e, CC BY 3.0) para a categoria do item; branco sobre transparente, tingido pela raridade
+export const icoItem = (it) => { const f = IC_TIPO[it && it.tipo] || (it && it.tipo === 'comida' ? 'consumable' : 'loot'); return `<img class="ico-item" alt="" src="assets/ic/items/${f}.webp" style="--rar:${RAR_COR[it && it.raro] || '#cfcfe0'}">`; };
 export const raridadeTag = (r) => `<span class="tag" style="background:${RAR_COR[r] || '#aaa'}">${esc(r)}</span>`;
 export function descItem(it) {
   if (!it) return '';

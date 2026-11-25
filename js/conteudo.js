@@ -83,9 +83,9 @@ export const EVENTOS = [
   { id: 'viajante', tipo: 'escolha', icone: '🧳', nome: 'Viajante Cansado', txt: 'Um viajante pede 25 de ouro para chegar à próxima vila.',
     opcoes: [{ t: 'Ajudar (−25 ouro)', ef: { ouro: -25, moral: 5, loot: 2 }, r: 'Ele agradece e deixa algo na sua mochila.' }, { t: 'Ignorar', ef: { inercia: 1 }, r: 'Ele segue só. Você sente um peso.' }] },
   { id: 'altar', tipo: 'escolha', icone: '⛩️', nome: 'Altar da Brasa', txt: 'Um altar antigo aceita uma oferenda de uma Tocha em troca de uma bênção.',
-    opcoes: [{ t: 'Oferecer 1 Tocha', ef: { tochas: -1, xp: 120, inercia: -1 }, r: 'A brasa do altar brilha e você sente a energia subir.' }, { t: 'Passar reto', ef: {}, r: 'O altar fica em silêncio.' }] },
+    opcoes: [{ t: 'Oferecer 1 Tocha', ef: { tochas: -1, inercia: -2 }, r: 'A brasa do altar brilha e você sente a energia subir.' }, { t: 'Passar reto', ef: {}, r: 'O altar fica em silêncio.' }] },
   { id: 'encapuzado', tipo: 'escolha', icone: '🕵️', nome: 'O Encapuzado', txt: 'Um estranho oferece 200 XP agora, mas a Inércia vai se aproximar.',
-    opcoes: [{ t: 'Aceitar o trato', ef: { xp: 200, inercia: 2, moral: -3 }, r: 'Ele sorri de um jeito que lembra o Rei.' }, { t: 'Recusar', ef: { moral: 3 }, r: 'Ele some entre as sombras.' }] },
+    opcoes: [{ t: 'Aceitar o trato', ef: { ouro: 40, inercia: 2, moral: -3 }, r: 'Ele sorri de um jeito que lembra o Rei.' }, { t: 'Recusar', ef: { moral: 3 }, r: 'Ele some entre as sombras.' }] },
   { id: 'bau_trancado', tipo: 'escolha', icone: '🧰', nome: 'Baú Trancado', txt: 'Um baú pesado. A chave custa 50 de ouro; o conteúdo é incerto.',
     opcoes: [{ t: 'Pagar 50 e abrir', ef: { ouro: -50, loot: 4 }, r: 'A fechadura cede.' }, { t: 'Deixar de lado', ef: {}, r: 'Você segue seu caminho.' }] },
 ];

@@ -11,6 +11,8 @@ import './paineis1.js';
 import './paineis2.js';
 import { G } from './game.js';
 import * as Au from './audio.js';
+import { montarEditor } from './criador.js';
+import { apPadrao, CORES_CLASSE } from './cosmeticos.js';
 
 // ======================= HUD =======================
 const mini = (v, max, cls) => `<span class="mini ${cls}">${Array.from({ length: max }, (_, i) => `<b class="${i < v ? 'on' : ''}"></b>`).join('')}</span>`;
@@ -39,7 +41,7 @@ async function itemPopup(p) {
   if (p.tipo === 'pr') { Au.sfx('pr'); Au.vibrar(100); return popup(`${CONF}<h2>NOVO PR!</h2><div class="grande">${LIFTS[p.liftId].emoji}</div><p><b>${esc(LIFTS[p.liftId].nome)}</b></p><p>e1RM <span class="verm">${fmt(p.pr.de, 1)}</span> → <b class="gold">${fmt(p.pr.para, 1)} kg</b> (+${fmt(p.pr.delta, 1)})</p><p class="suave">${fmt(p.pr.w, 1)} kg × ${p.pr.r}</p><p>${tierTag(p.tier)}</p><p class="suave peq">Um baú foi aberto como recompensa.</p>${btnOk('Forte!')}`); }
   if (p.tipo === 'tier') { Au.sfx('nivel'); Au.vibrar(150); return popup(`${CONF}<h2 style="color:${TIER_COR[p.para]}">RANK UP!</h2><div class="grande">🏅</div><p><b>${esc(LIFTS[p.liftId].nome)}</b></p><p>${tierTag(p.de)} → ${tierTag(p.para)}</p><p class="peq suave">Um baú lendário-tier foi aberto.</p>${btnOk('Incrível!')}`); }
   if (p.tipo === 'bau') return popupBau(p);
-  if (p.tipo === 'texto') { Au.sfx('pr'); return popup(`<h2 style="color:${p.cor || 'var(--ouro)'}">${esc(p.titulo)}</h2><p>${esc(p.txt)}</p>${btnOk('OK')}`); }
+  if (p.tipo === 'texto') { Au.sfx('pr'); return popup(`<h2 style="color:${p.cor || 'var(--ouro)'}">${esc(p.titulo)}</h2><p style="white-space:pre-line;text-align:left">${esc(p.txt)}</p>${btnOk('OK')}`); }
   if (p.tipo === 'missao') { Au.sfx('coin'); return popup(`<h2>MISSÃO CUMPRIDA!</h2><div class="grande">📜</div><p><b>${esc(p.q.txt)}</b></p><p class="gold">+${p.xp} XP · +${p.q.ouro} 🪙</p>${btnOk('Boa!')}`); }
   if (p.tipo === 'conquista') { Au.sfx('pr'); const c = p.c; return popup(`${CONF}<h2>CONQUISTA!</h2><div class="grande">🏆</div><p><b>${esc(c.nome)}</b></p><p class="suave">${esc(c.desc)}</p><p class="gold">${c.rec.ouro ? `+${c.rec.ouro} 🪙 ` : ''}${c.rec.xp ? `+${c.rec.xp} XP` : ''}</p>${btnOk('Ótimo')}`); }
   if (p.tipo === 'amanhecer') return popupAmanhecer(p.rel);
@@ -84,16 +86,24 @@ async function fimCapitulo(n) {
 }
 async function fimDeJogo() {
   const f = St.S.historia.final; const F = FINAIS[f]; if (!F) return; Au.sfx('nivel');
-  await popup(`${CONF}<h2>${esc(F.nome)}</h2><div class="grande">🔥</div>${F.txt.map((t) => `<p style="text-align:left">${esc(t)}</p>`).join('')}<p class="peq suave">Você pode iniciar o próximo ciclo no Livro da Aventura. A Brasa nunca se apaga para quem volta amanhã.</p>${btnOk('Fim… ou começo')}`);
+  await popup(`${CONF}<h2>${esc(F.nome)}</h2><div class="grande">🔥</div>${F.txt.map((t) => `<p style="text-align:left">${esc(t)}</p>`).join('')}<p class="peq suave">A Brasa nunca se apaga para quem volta amanhã.</p>${btnOk('Fim… ou começo')}`);
+  const r = await popup(`<h2>E agora?</h2><p style="text-align:left">O Vale respira. Você pode escolher o que vem a seguir — e mudar de ideia quando quiser, pelo Livro da Aventura.</p><div style="display:flex;flex-direction:column;gap:8px;margin-top:10px"><button class="btn pri" data-res="loop">⏳ Laço do Tempo<br><small>Recomece a campanha do capítulo 1 (monstros +12%). Mantém nível, itens e ouro; as missões e a leitura do Baralho se refazem.</small></button><button class="btn" data-res="explorador">🗝️ Explorador de Catacumbas<br><small>Catacumbas infinitas com todo o bestiário (até ND 30), chefes cada 5 andares e baús melhores.</small></button><button class="btn" data-res="depois">Decidir depois</button></div>`);
+  if (r === 'loop') St.novoCiclo(); else if (r === 'explorador') St.escolherModoFinal('explorador');
 }
 
 // ======================= CRIAÇÃO DE PERSONAGEM =======================
-let nvCls = 'guerreiro';
+let nvCls = 'guerreiro'; let nvEtapa = 1; let nvEst = null; let nvTocou = false;
+function lerForm() {
+  const nome = val('nv-nome').trim() || 'Herói'; const kcal = Math.round(valNum('nv-kcal')); const peso = valNum('nv-peso'), alt = valNum('nv-alt'), ida = valNum('nv-ida');
+  if (!(peso >= 30 && peso <= 300) || !(alt >= 100 && alt <= 250) || !(ida >= 14 && ida <= 100)) { toast('Confira peso, altura e idade.'); return null; }
+  if (!(kcal >= 800 && kcal <= 6000)) { toast('A meta de calorias deve ficar entre 800 e 6000.'); return null; }
+  return { nome, cls: nvCls, sexo: val('nv-sexo'), peso, altura: alt, idade: ida, kcalAlvo: kcal };
+}
 registrar('novo', {
   titulo: 'Novo herói',
   render() {
     const cartoes = Object.values(CLASSES).map((c) => `<div class="card classe-card ${nvCls === c.id ? 'sel' : ''}" data-act="classe" data-id="${c.id}"><span class="em">${c.emoji}</span><div><b>${esc(c.nome)}</b> <span class="peq suave">d${c.dado} · ${c.prim}</span><div class="peq">${esc(c.resumo)}</div><div class="peq suave">Recurso: ${esc(c.recurso)}</div></div></div>`).join('');
-    return `<label class="campo" for="nv-nome">Nome do herói</label><input id="nv-nome" maxlength="20" placeholder="Seu nome" value="${esc(val('nv-nome'))}">
+    return `<div id="nv-e1" class="${nvEtapa === 1 ? '' : 'oculto'}"><label class="campo" for="nv-nome">Nome do herói</label><input id="nv-nome" maxlength="20" placeholder="Seu nome" value="${esc(val('nv-nome'))}">
     <h3>Classe</h3>${cartoes}
     <h3>Seu corpo (define ranks e calorias)</h3><div class="card"><div class="linha"><div><label class="campo" for="nv-peso">Peso (kg)</label><input id="nv-peso" type="number" inputmode="decimal" step="0.1" value="70" data-on="kcal"></div><div><label class="campo" for="nv-alt">Altura (cm)</label><input id="nv-alt" type="number" inputmode="numeric" value="170" data-on="kcal"></div><div><label class="campo" for="nv-ida">Idade</label><input id="nv-ida" type="number" inputmode="numeric" value="25" data-on="kcal"></div></div>
     <label class="campo" for="nv-sexo">Tabela de ranks de força</label><select id="nv-sexo" data-on="kcal"><option value="M">Masculina</option><option value="F">Feminina</option><option value="N">Média das duas</option></select>
@@ -101,18 +111,23 @@ registrar('novo', {
     <label class="campo" for="nv-obj">Objetivo</label><select id="nv-obj" data-on="kcal"><option value="1">Manter peso</option><option value="0.85">Perder gordura (−15%)</option><option value="1.1">Ganhar massa (+10%)</option></select>
     <label class="campo" for="nv-kcal">Meta diária de kcal</label><input id="nv-kcal" type="number" inputmode="numeric" value="2200"><p class="peq suave" id="nv-dica"></p></div>
     <div class="aviso">Este jogo é recreativo. A meta de calorias é só uma estimativa (Mifflin-St Jeor) e <b>não é orientação médica ou nutricional</b>. Evite metas muito baixas e consulte um profissional.</div>
-    <button class="btn pri bloco" data-act="criar">Começar a aventura!</button>`;
+    <button class="btn pri bloco" data-act="etapa2">Próximo: aparência ▶</button></div>
+    <div id="nv-e2" class="${nvEtapa === 2 ? '' : 'oculto'}"><div id="ed-host"></div><button class="btn bloco" data-act="etapa1">◀ Voltar (nome, classe e corpo)</button><button class="btn pri bloco" data-act="criar">Começar a aventura!</button></div>`;
   },
-  aoAbrir: () => { calcKcal(); },
-  aoFechar: () => { if (!St.S) $('#titulo').classList.remove('oculto'); },
+  aoAbrir: () => {
+    calcKcal(); const h = $('#ed-host'); if (!h) return;
+    if (!nvEst) { nvEst = { ap: apPadrao(nvCls), cls: nvCls, aoMudar: () => { nvTocou = true; } }; nvTocou = false; }
+    nvEst.cls = nvCls; montarEditor(h, nvEst);
+  },
+  aoFechar: () => { nvEtapa = 1; nvEst = null; nvTocou = false; if (!St.S) $('#titulo').classList.remove('oculto'); },
   ao: { kcal: () => calcKcal() },
   acoes: {
-    classe: (el) => { nvCls = el.dataset.id; rerender(); },
+    classe: (el) => { nvCls = el.dataset.id; if (nvEst) { nvEst.cls = nvCls; if (!nvTocou) { const cc = CORES_CLASSE[nvCls]; Object.assign(nvEst.ap, { roupa1: cc.roupa1, roupa2: cc.roupa2, arm1: cc.arm1, arm2: cc.arm2 }); } nvEst.cat = undefined; } rerender(); },
+    etapa2: () => { if (!lerForm()) return; nvEtapa = 2; $('#nv-e1').classList.add('oculto'); $('#nv-e2').classList.remove('oculto'); $('#painel-corpo').scrollTop = 0; },
+    etapa1: () => { nvEtapa = 1; $('#nv-e2').classList.add('oculto'); $('#nv-e1').classList.remove('oculto'); $('#painel-corpo').scrollTop = 0; },
     criar: async () => {
-      const nome = val('nv-nome').trim() || 'Herói'; const kcal = Math.round(valNum('nv-kcal')); const peso = valNum('nv-peso'), alt = valNum('nv-alt'), ida = valNum('nv-ida');
-      if (!(peso >= 30 && peso <= 300) || !(alt >= 100 && alt <= 250) || !(ida >= 14 && ida <= 100)) return toast('Confira peso, altura e idade.');
-      if (!(kcal >= 800 && kcal <= 6000)) return toast('A meta de calorias deve ficar entre 800 e 6000.');
-      St.novoJogo({ nome, cls: nvCls, sexo: val('nv-sexo'), peso, altura: alt, idade: ida, kcalAlvo: kcal }); Au.configurar(St.S.cfg); fecharPainel(); $('#titulo').classList.add('oculto'); hud();
+      const cfg = lerForm(); if (!cfg) return; cfg.ap = nvEst ? nvEst.ap : apPadrao(nvCls);
+      St.novoJogo(cfg); Au.configurar(St.S.cfg); fecharPainel(); $('#titulo').classList.add('oculto'); hud();
       await G.comecar(true); await G.ui.dialogo('Prólogo', PROLOGO);
       await G.ui.dialogo('Mestra Brasa', ['Então você é o viajante que ouvi falar. Nossa Brasa mal queima...', 'Abra o MENU e registre algo real: uma série na Arena, uma caminhada na Trilha, uns minutos na Biblioteca ou uma refeição na Taverna.', 'Cada ação sua acende a Brasa. Quando o nível subir, a primeira caverna se abre no Vale. Boa sorte!']);
     },
@@ -147,7 +162,7 @@ export function instalarUi() {
   B.ligarPainel();
   G.ui = {
     modalAberto: () => B.painelAberto() || B.dialogoAberto() || B.popupAberto() || !$('#titulo').classList.contains('oculto') || (St.S == null && G.modo === 'titulo'),
-    dialogoAberto: B.dialogoAberto, dialogoAvancar: B.dialogoAvancar, fechar: () => { if (B.painelAberto()) fecharPainel(); }, painel: abrirPainel, toast, dialogo: B.dialogo,
+    dialogoAberto: B.dialogoAberto, dialogoAvancar: B.dialogoAvancar, fechar: () => { if (B.painelAberto()) fecharPainel(); }, painel: abrirPainel, toast, dialogo: B.dialogo, dialogoEscolha: B.dialogoEscolha,
     confirmar, tentarCapitulo, fimCapitulo, fimDeJogo, hud, drenar,
   };
   St.bus.on('mudou', hud); St.bus.on('popup', () => setTimeout(drenar, 30)); setInterval(drenar, 400); setInterval(tick, 1000);
