@@ -3,7 +3,7 @@ import * as St from './store.js';
 
 export function vidaAlvo(s) {
   if (!s) return 0.7; const H = s.historia, d = (s.dias && s.dias[St.hoje()]) || null; const ativo = d && (d.ativ || d.series > 0 || d.cardio > 0 || d.estudo > 0 || (d.comida && d.comida.length > 0));
-  const v = 0.80 * (1 - H.inercia / 10) + 0.12 * (H.moral / 100) + (ativo ? 0.08 : 0) + Math.min(0.08, ((s.sequencia && s.sequencia.atual) || 0) * 0.01);
+  const v = 0.80 * (1 - St.inerciaEf(s) / 10) + 0.12 * (H.moral / 100) + (ativo ? 0.08 : 0) + Math.min(0.08, ((s.sequencia && s.sequencia.atual) || 0) * 0.01);
   return Math.max(0.02, Math.min(1, v));
 }
 export const Vida = { cur: null, alvo: null, onda: null, ult: 0, acum: 0 };

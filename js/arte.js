@@ -88,7 +88,7 @@ export function assarExterno(m, opcoes = {}) {
   // praça e pontes: borda de pedra
   for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) { const id = m.g[j * m.w + i]; if (id === 'praca') { x.fillStyle = 'rgba(20,16,30,0.25)'; if (at(i, j + 1) !== 'praca' && !PREDIO_IDS.has(m.g[(j + 1) * m.w + i])) x.fillRect(i * TS, j * TS + 30, TS, 2); if (at(i, j - 1) !== 'praca') x.fillRect(i * TS, j * TS, TS, 1); } if (id === 'ponte') { x.fillStyle = '#3a2814'; if (m.g[(j - 1) * m.w + i] !== 'ponte' && m.g[(j - 1) * m.w + i] !== 'estrada') x.fillRect(i * TS, j * TS, TS, 3); } }
   // prédios vistos de cima: sombra no chão, telhado com cumeeira e a porta (degrau + tapete)
-  for (const b of m.predios || []) { x.fillStyle = 'rgba(10,6,20,0.30)'; x.fillRect(b.x * TS + 5, b.y * TS + 7, b.w * TS, b.h * TS); x.drawImage(TD.predio(b.w, b.h, b.tel || 'telhado', b.ruina), b.x * TS, b.y * TS); if (b.porta) x.drawImage(TD.porta(), b.porta.x * TS, b.porta.y * TS); }
+  for (const b of m.predios || []) { x.fillStyle = 'rgba(10,6,20,0.12)'; x.fillRect(b.x * TS + 2, b.y * TS + 3, b.w * TS, b.h * TS); x.drawImage(TD.predio(b.w, b.h, b.tel || 'telhado', b.ruina), b.x * TS, b.y * TS); if (b.porta) x.drawImage(TD.porta(), b.porta.x * TS, b.porta.y * TS); }
   void opcoes; return { canvas: c, base };
 }
 export function spriteObjeto(id, v = 0, f = 0, viz = {}) {
@@ -155,12 +155,12 @@ export function assarMasmorra(d, tema, T = { PAREDE: 0, CHAO: 1, DESCE: 2, SOBE:
 // ---------- luz e partículas ----------
 let escuridao = null;
 // desenha a escuridão cobrindo a vista inteira; "luzes" em coordenadas de tela (px) com raio e intensidade
-export function aplicarEscuridao(ctx, w, h, luzes, base = 0.9, cor = '10,6,24') {
+export function aplicarEscuridao(ctx, w, h, luzes, base = 0.9, cor = '10,6,24', brilho = 1) {
   if (!escuridao || escuridao.width !== w || escuridao.height !== h) escuridao = cv(w, h); const o = escuridao.getContext('2d'); o.globalCompositeOperation = 'source-over'; o.clearRect(0, 0, w, h); o.fillStyle = `rgba(${cor},${base})`; o.fillRect(0, 0, w, h); o.globalCompositeOperation = 'destination-out';
   for (const L of luzes) { const g = o.createRadialGradient(L.x, L.y, L.r * 0.1, L.x, L.y, L.r); const a = L.a ?? 1; g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(0.55, `rgba(0,0,0,${a * 0.65})`); g.addColorStop(1, 'rgba(0,0,0,0)'); o.fillStyle = g; o.fillRect(L.x - L.r, L.y - L.r, L.r * 2, L.r * 2); }
   ctx.drawImage(escuridao, 0, 0);
   // brilho quente das luzes
-  ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const L of luzes) { if (!L.quente) continue; const g = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.r * 0.9); g.addColorStop(0, 'rgba(255,170,70,0.20)'); g.addColorStop(1, 'rgba(255,120,30,0)'); ctx.fillStyle = g; ctx.fillRect(L.x - L.r, L.y - L.r, L.r * 2, L.r * 2); } ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; for (const L of luzes) { if (!L.quente) continue; const g = ctx.createRadialGradient(L.x, L.y, 0, L.x, L.y, L.r * 0.9); g.addColorStop(0, `rgba(255,170,70,${(0.20 * brilho).toFixed(3)})`); g.addColorStop(1, 'rgba(255,120,30,0)'); ctx.fillStyle = g; ctx.fillRect(L.x - L.r, L.y - L.r, L.r * 2, L.r * 2); } ctx.restore();
 }
 export function sombraEntidade(ctx, cx, cy, rx = 10, ry = 4, a = 0.35) { ctx.fillStyle = `rgba(10,6,20,${a})`; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); }
 export class Particulas {

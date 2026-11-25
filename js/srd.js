@@ -107,20 +107,23 @@ export function recursosComFator(max, f) {
 }
 
 // ---------- Dados ----------
-export function rolar(expr, rng = Math.random, crit = false) {
+// Gancho visual: a interface (dados.js) se registra aqui para animar cada dado rolado. Em Node (simulações) fica nulo.
+export const HOOK = { emit: null };
+export function rolar(expr, rng = Math.random, crit = false, mudo = false) {
   // aceita "2d6+1d4+3"; crit dobra os dados
-  let total = 0; const partes = [];
+  let total = 0; const partes = []; const dados = [];
   const re = /([+-]?)\s*(\d+)(?:d(\d+))?/g; let m;
   while ((m = re.exec(expr))) {
     const sinal = m[1] === '-' ? -1 : 1;
     if (m[3]) {
       const n = parseInt(m[2]) * (crit ? 2 : 1), f = parseInt(m[3]);
-      for (let i = 0; i < n; i++) { const v = 1 + Math.floor(rng() * f); total += sinal * v; partes.push(v); }
+      for (let i = 0; i < n; i++) { const v = 1 + Math.floor(rng() * f); total += sinal * v; partes.push(v); dados.push({ f, v }); }
     } else total += sinal * parseInt(m[2]);
   }
+  if (!mudo && HOOK.emit && dados.length) HOOK.emit(dados, { expr, total, crit });
   return { total, partes };
 }
-export const d20 = (rng = Math.random) => 1 + Math.floor(rng() * 20);
+export const d20 = (rng = Math.random, mudo = false) => { const v = 1 + Math.floor(rng() * 20); if (!mudo && HOOK.emit) HOOK.emit([{ f: 20, v }], null); return v; };
 export const media = (expr) => { let t = 0; const re = /([+-]?)\s*(\d+)(?:d(\d+))?/g; let m; while ((m = re.exec(expr))) { const s = m[1] === '-' ? -1 : 1; t += s * (m[3] ? parseInt(m[2]) * (parseInt(m[3]) + 1) / 2 : parseInt(m[2])); } return t; };
 
 // ---------- Magias (nomes pt-BR do SRD) ----------

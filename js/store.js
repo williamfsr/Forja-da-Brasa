@@ -22,8 +22,8 @@ export { hoje };
 export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', peso = 75, altura = 175, idade = 30, kcalAlvo = 2200, ap = null } = {}) {
   const c = CLASSES[cls];
   const s = {
-    v: 1, criado: Date.now(),
-    heroi: { nome, cls, sexo, peso, altura, idade, kcalAlvo, nivel: 1, xp: 0, hp: null, ouro: 60, tochas: 3, exaustao: 0, insp: 0, sono: false, capa: 'padrao', capas: ['padrao'], paragon: 0, ap: ap || apPadrao(cls) },
+    v: 1, mig5: true, criado: Date.now(),
+    heroi: { nome, cls, sexo, peso, altura, idade, kcalAlvo, nivel: 1, xp: 0, hp: null, ouro: 60, tochas: 3, exaustao: 0, insp: 0, sono: false, capa: 'padrao', capas: ['padrao'], paragon: 0, bonusPV: 0, bonusCura: 0, interesse: 'oposto', ap: ap || apPadrao(cls) },
     companheiros: [], npcs: {},
     recursos: { slots: [], cont: {} }, recursosMax: { slots: [], cont: {} },
     inv: [{ id: 'pocao1', n: 2 }], equip: { arma: c.inicio.arma, armadura: c.inicio.armadura, escudo: c.inicio.escudo, ac1: null, ac2: null },
@@ -31,7 +31,7 @@ export function estadoInicial({ nome = 'Herói', cls = 'guerreiro', sexo = 'M', 
     stats: { cardioMin: 0, estudoMin: 0, series: 0, prs: 0, diasAtivos: 0, perfeitos: 0, banquetes: 0, abates: 0, chefes: 0, ouroTotal: 60, triplices: 0, voltas: 0, pomos: 0, aeroTipos: {}, masmorras: 0, paragon: 0 },
     dias: {}, diario: { data: hoje(), missoes: [], evento: null, loot: 0 },
     sequencia: { atual: 0, melhor: 0, escudos: 0, ultimaAtiv: null, voltaBonus: 0 },
-    historia: { cap: 1, limpos: [], flags: {}, moral: 50, inercia: 2, decisoes: {}, checkpoint: {}, ciclo: 1, prologo: false, vistos: {}, final: null },
+    historia: { cap: 1, limpos: [], flags: {}, moral: 50, inercia: 9, decisoes: {}, checkpoint: {}, ciclo: 1, prologo: false, vistos: {}, final: null },
     catacumbas: { melhor: 0 }, campanha: Camp.novoEstado(),
     conquistas: {}, cfg: { som: true, vibra: true, musica: false, descanso: [0], textoGrande: false },
     timers: {}, relatorio: null, run: null, log: [], inicio: hoje(),
@@ -48,8 +48,11 @@ export function carregar() {
 function migrar(s) {
   const base = estadoInicial({ cls: s.heroi.cls });
   const merge = (a, b) => { for (const k of Object.keys(b)) { if (a[k] === undefined) a[k] = b[k]; else if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object') merge(a[k], b[k]); } return a; };
+  if (!s.mig5) { if (s.npcs && s.npcs.safira && !s.npcs.ordalia) { s.npcs.ordalia = s.npcs.safira; delete s.npcs.safira; } s.mig5 = true; } // v5: a leitora de cartas virou Ordália
   return merge(s, base);
 }
+// Maré efetiva: o Selo da Aurora (Safira) silencia a Inércia por alguns dias sem mexer no valor real
+export const inerciaEf = (s = S) => { const H = s && s.historia; if (!H) return 0; return H.selo && hoje() <= H.selo.ate ? 0 : H.inercia; };
 export function zerar() { localStorage.removeItem(KEY); S = null; }
 export function exportar() { return JSON.stringify(S); }
 export function importar(txt) { const o = JSON.parse(txt); if (!o || !o.heroi || !o.stats) throw new Error('Arquivo inválido'); S = migrar(o); salvar(); bus.emit('mudou'); }
@@ -87,7 +90,7 @@ function anunciarCamp(e) {
   else if (e.t === 'passo') pop({ tipo: 'texto', titulo: `${e.q.titulo}: etapa cumprida`, txt: e.fala, cor: '#6fcf7f' });
   else if (e.t === 'fim') { logar(`Missão concluída: ${e.q.titulo}.`); pop({ tipo: 'texto', titulo: 'Missão concluída!', txt: `${e.q.titulo}. Recompensas entregues.`, cor: '#ff9f40' }); }
   else if (e.t === 'lore') pop({ tipo: 'texto', titulo: `Diário de Nhor: ${e.p.t}`, txt: e.p.txt, cor: '#b49bff' });
-  else if (e.t === 'leitura') pop({ tipo: 'texto', titulo: 'O Baralho do Hábito fala', txt: `Safira vira quatro cartas.\n☀ ${Camp.RELIQUIAS.sol.carta}: ${Camp.SITIOS[e.L.sol].dica}\n✦ ${Camp.RELIQUIAS.simbolo.carta}: ${Camp.SITIOS[e.L.simbolo].dica}\n📖 ${Camp.RELIQUIAS.diario.carta}: ${Camp.SITIOS[e.L.diario].dica}\n♟ ${Camp.ALIADOS[e.L.aliado].carta}: ${Camp.ALIADOS[e.L.aliado].dica}\n(Detalhes no Diário.)`, cor: '#9ad0ff' });
+  else if (e.t === 'leitura') pop({ tipo: 'texto', titulo: 'O Baralho do Hábito fala', txt: `Ordália vira quatro cartas.\n☀ ${Camp.RELIQUIAS.sol.carta}: ${Camp.SITIOS[e.L.sol].dica}\n✦ ${Camp.RELIQUIAS.simbolo.carta}: ${Camp.SITIOS[e.L.simbolo].dica}\n📖 ${Camp.RELIQUIAS.diario.carta}: ${Camp.SITIOS[e.L.diario].dica}\n♟ ${Camp.ALIADOS[e.L.aliado].carta}: ${Camp.ALIADOS[e.L.aliado].dica}\n(Detalhes no Diário.)`, cor: '#9ad0ff' });
   else if (e.t === 'reliquia') pop({ tipo: 'texto', titulo: `Relíquia: ${e.r.nome}`, txt: e.r.txt, cor: '#ffd24a' });
   else if (e.t === 'aliado') pop({ tipo: 'texto', titulo: `${e.a.nome} se junta a você`, txt: `"${e.a.frase}"`, cor: '#9ad0ff' });
 }
@@ -134,6 +137,7 @@ function subirNivel(de, para) {
 // ---------- atividade, sequência ----------
 function marcarAtivo() {
   const D = dia(); if (D.ativ) return; D.ativ = true; S.stats.diasAtivos++;
+  S.historia.inercia = R.clamp(S.historia.inercia - 1, 0, 10); // a primeira brasa do dia: o mundo respira
   const q = S.sequencia, h = hoje();
   if (q.ultimaAtiv !== h) {
     if (!q.ultimaAtiv) q.atual = 1;
@@ -246,9 +250,15 @@ export function delComida(i) { snapshot(); const D = dia(); const [x] = D.comida
 export function faixaDeHoje() { const D = dia(); const tol = modEvento('tolera') > 1 ? 0 : 0; const e = eventoAtual(); const t = e && e.mod && e.mod.tolera ? e.mod.tolera : 0; return R.faixaNutricao(D.kcal, S.heroi.kcalAlvo, D.comida.length, t); }
 
 // ---------- Hábitos e provas ----------
-export function addHabito(nome, xp = 20) { S.habitos.push({ id: 'h' + Date.now(), nome: String(nome).slice(0, 40), xp: Math.max(5, Math.min(60, +xp || 20)) }); salvaEmite(); }
+export const HAB_CAP_XP = 120; // teto diário de XP vindo de hábitos (o dia ainda conta como ativo)
+export function addHabito(nome, xp = 20, extra = {}) { const n = String(nome).trim().slice(0, 40); if (!n) return null; const h = { id: 'h' + Date.now() + Math.floor(Math.random() * 99), nome: n, xp: Math.max(5, Math.min(60, +xp || 20)), ...extra, desde: hoje() }; S.habitos.push(h); salvaEmite(); return h; }
 export function delHabito(id) { S.habitos = S.habitos.filter((h) => h.id !== id); salvaEmite(); }
-export function cumprirHabito(id) { const h = S.habitos.find((x) => x.id === id); const D = dia(); if (!h || D.hab[id]) return null; snapshot(); D.hab[id] = true; marcarAtivo(); const xp = ganharXp(h.xp, 'habito'); logar(`Hábito: ${h.nome}`); depoisDeAcao(); return { xp }; }
+export function cumprirHabito(id) {
+  const h = S.habitos.find((x) => x.id === id); const D = dia(); if (!h || D.hab[id]) return null; snapshot(); D.hab[id] = true; marcarAtivo();
+  const usado = D.xpHab || 0; const base = Math.max(0, Math.min(h.xp, HAB_CAP_XP - usado)); D.xpHab = usado + base; const xp = base > 0 ? ganharXp(base, 'habito') : 0; logar(`Hábito: ${h.nome}`); depoisDeAcao(); return { xp, limite: base < h.xp };
+}
+// dias seguidos cumprindo o hábito (se hoje ainda não foi feito, conta a partir de ontem)
+export function sequenciaHabito(id) { let d = hoje(), n = 0; if (!(S.dias[d] && S.dias[d].hab && S.dias[d].hab[id])) d = R.addDias(d, -1); while (S.dias[d] && S.dias[d].hab && S.dias[d].hab[id] && n < 400) { n++; d = R.addDias(d, -1); } return n; }
 export function addProva(nome, data) { S.provas.push({ id: 'p' + Date.now(), nome: String(nome).slice(0, 40), data }); S.provas.sort((a, b) => a.data.localeCompare(b.data)); salvaEmite(); }
 export function delProva(id) { S.provas = S.provas.filter((p) => p.id !== id); salvaEmite(); }
 
@@ -269,7 +279,7 @@ function concluirMissao(q) {
 }
 function checarTriplice() {
   const D = dia(); if (D.triplice) return; const corpo = D.series > 0 || D.cardio > 0, mente = D.estudo > 0, alma = D.comida.length > 0 || Object.keys(D.hab).length > 0;
-  if (corpo && mente && alma) { D.triplice = true; S.stats.triplices++; ganharXp(100, 'triplice'); darBau(4, 'triplice'); pop({ tipo: 'texto', titulo: 'TRÍPLICE COROA!', txt: 'Corpo, Mente e Alma no mesmo dia. +100 XP e baú raro.', cor: '#b57bff' }); }
+  if (corpo && mente && alma) { D.triplice = true; S.stats.triplices++; S.historia.inercia = R.clamp(S.historia.inercia - 1, 0, 10); ganharXp(100, 'triplice'); darBau(4, 'triplice'); pop({ tipo: 'texto', titulo: 'TRÍPLICE COROA!', txt: 'Corpo, Mente e Alma no mesmo dia. +100 XP e baú raro.', cor: '#b57bff' }); }
 }
 export function aplicarEfeito(ef, origem) {
   if (!ef) return; const H = S.historia;
@@ -368,7 +378,10 @@ export function comprar(id, mod = 1) {
 export function vender(id) { const it = ITENS[id]; if (!invQtd(id)) return { erro: 'Sem o item.' }; const p = precoVenda(it); invDel(id, 1); ganharOuro(p); salvaEmite(); return { ok: true, p }; }
 export function usarForaDaMasmorra(id) {
   const it = ITENS[id]; if (!it || !invQtd(id)) return { erro: 'Sem o item.' };
-  if (it.cura) { const n = rolar(it.cura).total; const m = der().hpMax; S.heroi.hp = Math.min(m, (S.heroi.hp ?? m) + n); invDel(id); salvaEmite(); return { msg: `Curou ${n} PV.` }; }
+  if (it.selo) { S.historia.selo = { ate: R.addDias(hoje(), it.selo - 1) }; invDel(id); salvaEmite(); return { msg: `🔔 A Névoa recua por ${it.selo} dia(s): a Maré efetiva é 0/10.` }; }
+  if (it.pvMax) { S.heroi.bonusPV = (S.heroi.bonusPV || 0) + it.pvMax; invDel(id); S.heroi.hp = Math.min(der().hpMax, (S.heroi.hp ?? 0) + it.pvMax); salvaEmite(); return { msg: `PV máximos +${it.pvMax} (permanente).` }; }
+  if (it.curaPerm) { S.heroi.bonusCura = (S.heroi.bonusCura || 0) + it.curaPerm; invDel(id); salvaEmite(); return { msg: `Suas curas rendem +${it.curaPerm} PV (permanente).` }; }
+  if (it.cura) { const n = rolar(it.cura).total + (S.heroi.bonusCura || 0); const m = der().hpMax; S.heroi.hp = Math.min(m, (S.heroi.hp ?? m) + n); invDel(id); salvaEmite(); return { msg: `Curou ${n} PV.` }; }
   if (it.restaura) { if (!S.heroi.exaustao) return { erro: 'Você não está exausto.' }; S.heroi.exaustao--; invDel(id); salvaEmite(); return { msg: 'Exaustão reduzida em 1 nível.' }; }
   if (it.escudoSeq) { S.sequencia.escudos++; invDel(id); salvaEmite(); return { msg: 'Escudo de Sequência ativo (protege 1 dia perdido).' }; }
   if (it.insp) { S.heroi.insp = Math.min(2, S.heroi.insp + 1); invDel(id); salvaEmite(); return { msg: 'Inspiração concedida.' }; }
@@ -389,12 +402,12 @@ export function concluirCapitulo(n, escolha) {
   if (escolha != null) { const op = cap.decisao.opcoes[escolha]; H.decisoes[n] = escolha; aplicarEfeito(op.ef, 'historia'); }
   const rc = cap.recompensa || {}; if (rc.ouro) ganharOuro(rc.ouro); if (rc.item) invAdd(rc.item, 1); ganharXp(100 + n * 25, 'chefe', { semMult: true });
   if (cap.brasa) pop({ tipo: 'texto', titulo: cap.brasa, txt: 'Uma nova Brasa acende na Forja Primeva.', cor: '#ff9f40' });
-  if (n === 20) { H.final = finalPorMoral(H.moral, H.inercia); }
+  if (n === 20) { H.final = finalPorMoral(H.moral, H.inercia); H.flags.rei_derrotado = true; }
   for (const e of Camp.aoConcluirCapitulo(S, n, ganchosCamp)) anunciarCamp(e);
   delete H.checkpoint[n]; verificarConquistas(); salvaEmite();
 }
 export function novoCiclo() {
-  const H = S.historia; H.ciclo++; H.limpos = []; H.checkpoint = {}; H.decisoes = {}; H.final = null; H.inercia = 3; H.cap = 1;
+  const H = S.historia; H.ciclo++; H.limpos = []; H.checkpoint = {}; H.decisoes = {}; H.final = null; H.inercia = 9; H.cap = 1; delete H.festa; delete H.flags.festa_feita;
   const C = S.campanha; C.q = {}; C.leitura = null; C.rel = {}; C.modo = 'campanha'; C.loops++; S.companheiros = S.companheiros.filter((c) => !c.aliadoId); salvaEmite();
 }
 // Fim de campanha: 'explorador' abre as catacumbas infinitas com tudo o que o herói conquistou.

@@ -10,6 +10,8 @@ import { S, tierTag, descItem, nomeItem, icoItem } from './uiutil.js';
 import './paineis1.js';
 import './paineis2.js';
 import './paineis3.js';
+import './paineis4.js';
+import './habitos.js';
 import './grimorio.js';
 import { G } from './game.js';
 import * as Au from './audio.js';

@@ -1,5 +1,6 @@
 // Infraestrutura da interface: painéis, diálogos, popups e avisos (DOM).
 import * as Au from './audio.js';
+import { aguardar as aguardarDados, ocupado as dadosOcupado } from './dados.js';
 
 export const $ = (s, r = document) => r.querySelector(s);
 export const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -75,7 +76,7 @@ function poeCena(ret) {
   ret.className = 'ret'; N.append(ret); const hr = heroiRet && heroiRet(); if (hr) { hr.className = 'ret'; H.append(hr); } root.classList.add('cena');
 }
 function falante(q) { const root = $('#dialogo'); root.classList.toggle('f-heroi', q === 'heroi'); root.classList.toggle('f-npc', q !== 'heroi'); }
-export function dialogo(nome, linhas, opts = {}) {
+function dialogoImpl(nome, linhas, opts = {}) {
   return new Promise((res) => {
     dlg = { nome, linhas: linhas.slice(), i: 0, res, cheio: false, h: null }; poeCena(opts.retrato || null); $('#dialogo .dialogo-opcoes').innerHTML = '';
     $('#dialogo').classList.remove('oculto', 'com-opcoes'); $('.dialogo-seta').style.display = ''; mostrarLinha();
@@ -83,7 +84,7 @@ export function dialogo(nome, linhas, opts = {}) {
   });
 }
 // Mostra um texto e as opções (só de fala); devolve o id da escolhida. Setas/W-S navegam, Enter confirma; toque escolhe direto.
-export function dialogoEscolha({ nome, retrato = null, texto, opcoes }) {
+function dialogoEscolhaImpl({ nome, retrato = null, texto, opcoes }) {
   return new Promise((res) => {
     dlg = { nome, linhas: [texto], i: 0, res, cheio: false, h: null, escolha: true, cur: Math.max(0, opcoes.findIndex((o) => !o.off)), ops: opcoes }; poeCena(retrato); $('#dialogo').classList.remove('oculto'); $('#dialogo').classList.add('com-opcoes'); $('.dialogo-seta').style.display = 'none';
     const box = $('#dialogo .dialogo-opcoes'); box.innerHTML = '';
@@ -93,6 +94,9 @@ export function dialogoEscolha({ nome, retrato = null, texto, opcoes }) {
 }
 function marcaCursor() { if (!dlg || !dlg.ops) return; [...$('#dialogo .dialogo-opcoes').children].forEach((b, i) => b.classList.toggle('sel', i === dlg.cur)); }
 function escolher(n) { if (!dlg || !dlg.ops || !dlg.ops[n] || dlg.ops[n].off) return; const o = dlg.ops[n], r = dlg.res; clearInterval(dlg.h); Au.sfx('select'); fecharDialogo(); r(o.id); }
+// diálogos esperam a animação do dado grande (teste de atributo) antes de abrir o texto
+export function dialogo(nome, linhas, opts = {}) { return dadosOcupado() ? aguardarDados().then(() => dialogoImpl(nome, linhas, opts)) : dialogoImpl(nome, linhas, opts); }
+export function dialogoEscolha(o) { return dadosOcupado() ? aguardarDados().then(() => dialogoEscolhaImpl(o)) : dialogoEscolhaImpl(o); }
 export function dialogoNavegar(dir) { if (!dlg || !dlg.ops) return false; const n = dlg.ops.length; let c = dlg.cur; for (let k = 0; k < n; k++) { c = (c + (dir === 'baixo' ? 1 : -1) + n) % n; if (!dlg.ops[c].off) break; } dlg.cur = c; marcaCursor(); Au.sfx('select'); return true; }
 function fecharDialogo() { if (dlg) clearInterval(dlg.h); dlg = null; const r = $('#dialogo'); r.classList.add('oculto'); r.classList.remove('cena', 'com-opcoes', 'f-heroi'); r.onclick = null; $('#dialogo .dialogo-opcoes').innerHTML = ''; poeCena(null); }
 function mostrarLinha() {

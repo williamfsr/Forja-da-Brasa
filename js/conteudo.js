@@ -138,7 +138,7 @@ export const CAPAS = {
   padrao: { nome: 'Padrão', c: '#8a3a3a', C: '#5a2020' }, vermelha: { nome: 'Vermelha de Fogo', c: '#e0302a', C: '#8a1410' },
   dourada: { nome: 'Dourada', c: '#f0c030', C: '#a07810' }, azul: { nome: 'Azul Real', c: '#3a6ae0', C: '#1a3a90' },
   roxa: { nome: 'Roxa Arcana', c: '#9a4ae0', C: '#5a1a90' }, arcoiris: { nome: 'Arco-íris', c: '#ff7ac0', C: '#7a2aa0' },
-  estelar: { nome: 'Estelar', c: '#7af0e0', C: '#2a8a9a' },
+  estelar: { nome: 'Estelar', c: '#7af0e0', C: '#2a8a9a' }, heroi: { nome: 'Capa do Herói', c: '#ff8a2a', C: '#a02a00' },
 };
 
 export function itemNome(id) { const i = ITENS[id]; return i ? i.nome : id; }

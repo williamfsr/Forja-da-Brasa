@@ -46,7 +46,7 @@ export async function iniciar(o) {
   const bt = { s, B, o, mw, mh, tema, t: 0, modo: 'normal', magia: null, item: null, sel: null, confirma: null, ocupado: true, rapido: false, auto: false, fim: false, esperas: [], fx: [], flut: [], baloes: [], log: [], menu: 'raiz', mov: null, foco: { x: pos.heroi.x, y: pos.heroi.y }, livre: false, ativoId: null, resolver: null, pan: null, aviso: '', moveu: false };
   Bt.bt = bt; window.__bt = bt;
   for (const u of B.un) u.v = criarV(u);
-  Rn.VW.sujo = true; document.body.classList.add('em-batalha'); $('#bt').classList.remove('oculto'); ligarEntrada(bt); montarOrdem(bt); montarMenu(bt);
+  Rn.VW.sujo = true; document.body.classList.add('em-batalha'); $('#bt').classList.remove('oculto'); $('#bt-hero').classList.remove('oculto'); heroSig = ''; ligarEntrada(bt); montarOrdem(bt); montarMenu(bt);
   const fim = new Promise((r) => { bt.resolver = r; });
   rodarInicio(bt).catch((e) => console.error(e));
   return fim;
@@ -68,12 +68,12 @@ async function rodarInicio(bt) {
   const evs = T.comecarCombate(B); await tocar(bt, evs); if (B.fim) return terminar(bt); devolver(bt);
 }
 function devolver(bt) { bt.ocupado = false; bt.rapido = false; bt.modo = 'normal'; bt.magia = null; bt.item = null; bt.menu = 'raiz'; bt.confirma = null; bt.sel = null; if (bt.B.h.vivo) recalcMov(bt); montarMenu(bt); montarOrdem(bt); if (bt.auto && !bt.fim) setTimeout(() => autoTurno(bt), 250); }
-export function fimBatalha() { const bt = Bt.bt; if (!bt) return; ligarEntrada(bt, true); document.body.classList.remove('em-batalha'); $('#bt').classList.add('oculto'); $('#bt-menu').innerHTML = ''; $('#bt-ordem').innerHTML = ''; Rn.VW.sujo = true; Bt.bt = null; window.__bt = null; }
+export function fimBatalha() { const bt = Bt.bt; if (!bt) return; ligarEntrada(bt, true); document.body.classList.remove('em-batalha'); $('#bt').classList.add('oculto'); $('#bt-hero').classList.add('oculto'); $('#bt-hero').innerHTML = ''; $('#bt-menu').innerHTML = ''; $('#bt-ordem').innerHTML = ''; Rn.VW.sujo = true; Bt.bt = null; window.__bt = null; }
 
 // ---------- espera por tempo (afetada pelo modo rápido) ----------
 function esp(bt, s) { return new Promise((r) => { bt.esperas.push({ t: s, r }); }); }
 export function atualizar(dt) {
-  const bt = Bt.bt; if (!bt) return; const k = bt.rapido ? 4 : 1; const d = dt * k; bt.t += dt;
+  const bt = Bt.bt; if (!bt) return; const k = bt.rapido ? 4 : 1; const d = dt * k; bt.t += dt; bt.heroT = (bt.heroT || 0) + dt; if (bt.heroT > 0.25) { bt.heroT = 0; montarHero(bt); } bt.ordT = (bt.ordT || 0) + dt; if (bt.ordT > 0.7) { bt.ordT = 0; montarOrdem(bt); }
   for (let i = bt.esperas.length - 1; i >= 0; i--) { const e = bt.esperas[i]; e.t -= d; if (e.t <= 0) { bt.esperas.splice(i, 1); e.r(); } }
   for (const u of bt.B.un) { const v = u.v; if (!v) continue; v.fl = Math.max(0, v.fl - dt); if (v.poseT > 0) { v.poseT -= d; if (v.poseT <= 0) v.pose = 'idle'; }
     if (v.mov) { const m = v.mov; m.t += d / m.dur; const q = Math.min(1, m.t); v.x = m.x0 + (m.x1 - m.x0) * q; v.y = m.y0 + (m.y1 - m.y0) * q; if (q >= 1) { v.x = m.x1; v.y = m.y1; const r = m.r; v.mov = null; r(); } }
@@ -284,7 +284,7 @@ export function desenharDepois(ctx) {
 // ======================= entrada (toque) =======================
 function ligarEntrada(bt, remover = false) {
   const c = Rn.VW.canvas; if (remover) { if (bt.h) { c.removeEventListener('pointerdown', bt.h.d); c.removeEventListener('pointermove', bt.h.m); c.removeEventListener('pointerup', bt.h.u); c.removeEventListener('pointercancel', bt.h.u); } return; }
-  const d = (e) => { bt.pan = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, mov: false, id: e.pointerId }; try { c.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } };
+  const d = (e) => { if (e.pointerType === 'mouse' && e.button !== 0) return; bt.pan = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, mov: false, id: e.pointerId }; try { c.setPointerCapture(e.pointerId); } catch (x) { /* ok */ } };
   const m = (e) => { const p = bt.pan; if (!p) return; const dx = e.clientX - p.x, dy = e.clientY - p.y; if (!p.mov && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 10) { p.mov = true; bt.livre = true; } if (p.mov) { const r = c.getBoundingClientRect(); Rn.cam.x = Math.round(Rn.cam.x - dx * Rn.VW.w / r.width); Rn.cam.y = Math.round(Rn.cam.y - dy * Rn.VW.h / r.height); Rn.cam.x = Math.max(0, Math.min(Math.max(0, bt.mw * TS - Rn.VW.w), Rn.cam.x)); Rn.cam.y = Math.max(0, Math.min(Math.max(0, bt.mh * TS - Rn.VW.h), Rn.cam.y)); p.x = e.clientX; p.y = e.clientY; } };
   const u = (e) => { const p = bt.pan; bt.pan = null; if (!p || p.mov || e.type === 'pointercancel') return; toque(bt, e.clientX, e.clientY); };
   bt.h = { d, m, u }; c.addEventListener('pointerdown', d); c.addEventListener('pointermove', m); c.addEventListener('pointerup', u); c.addEventListener('pointercancel', u);
@@ -332,10 +332,44 @@ function painelMira(bt, menu) {
 function coneTiles(B, u, tx, ty, len) { return T.areaMagia(B, u, 'maos_flam', tx, ty).tiles.filter(([x, y]) => Math.max(Math.abs(x - u.x), Math.abs(y - u.y)) <= len); }
 
 // ======================= DOM: ordem e menu =======================
+// ---- ícones frontais (retratos) para a faixa de iniciativa ----
+const icoCache = new WeakMap();
+function iconeUn(bt, u) {
+  let c = icoCache.get(u); if (c) return c; c = document.createElement('canvas'); c.width = 40; c.height = 40; const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  try {
+    if (u.heroi) { const r = retrato(Rn.apDe(bt.s), Rn.visDe(bt.s), 2); const k = 40 / r.width; x.drawImage(r, 0, 40 - r.height * k, 40, r.height * k); }
+    else if (u.ap) { const r = retrato(u.ap, visInimigo(u), 2); const k = 40 / r.width; x.drawImage(r, 0, 40 - r.height * k, 40, r.height * k); }
+    else { const sp = spriteUn(u); const k = Math.min(40 / sp.width, 40 / sp.height); const w = sp.width * k, h = sp.height * k; x.drawImage(sp, (40 - w) / 2, 40 - h, w, h); }
+  } catch (e) { x.fillStyle = '#3a3355'; x.fillRect(0, 0, 40, 40); x.fillStyle = '#fff'; x.font = '700 14px monospace'; x.textAlign = 'center'; x.fillText((u.nome || '?').slice(0, 1), 20, 26); }
+  icoCache.set(u, c); return c;
+}
 function montarOrdem(bt) {
-  const el = $('#bt-ordem'); if (!el) return; const B = bt.B; const n = B.ordem.length; let h = '';
-  for (let k = 0; k < n; k++) { const id = B.ordem[(B.i + k) % n]; const u = B.un.find((q) => q.id === id); if (!u || !u.vivo || u.saiu) continue; const cls = u.heroi ? 'her' : u.eq === 'j' ? 'ali' : 'ini'; const tag = u.heroi ? '★' : (u.nome || '?').replace(/^(Guardião|Capitão|Mestre)\s*/i, '').slice(0, 2).toUpperCase(); h += `<span class="ord ${cls} ${u.id === bt.ativoId ? 'at' : ''}" title="${esc(u.nome)}">${esc(tag)}<i style="width:${Math.max(0, Math.min(100, (u.hp / u.hpMax) * 100))}%"></i></span>`; }
-  el.innerHTML = `<span class="rod">R${B.rodada}</span>${h}<button class="ord-centro" data-bt="centro" aria-label="Centralizar">⌖</button>`;
+  const el = $('#bt-ordem'); if (!el) return; const B = bt.B; const n = B.ordem.length; el.innerHTML = `<span class="rod">R${B.rodada}</span>`;
+  for (let k = 0; k < n; k++) {
+    const id = B.ordem[(B.i + k) % n]; const u = B.un.find((q) => q.id === id); if (!u || !u.vivo || u.saiu) continue;
+    const cls = u.heroi ? 'her' : u.eq === 'j' ? 'ali' : 'ini'; const sp = document.createElement('span'); sp.className = `ord ${cls} ${u.id === bt.ativoId ? 'at' : ''}`; sp.title = u.nome || '';
+    const base = iconeUn(bt, u); const cc = document.createElement('canvas'); cc.width = 40; cc.height = 40; cc.getContext('2d').drawImage(base, 0, 0); sp.append(cc);
+    const em = document.createElement('em'); em.textContent = k === 0 ? '▶' : String(k + 1); sp.append(em); const bar = document.createElement('i'); bar.style.width = Math.max(0, Math.min(100, (u.hp / u.hpMax) * 100)) + '%'; bar.style.background = u.hp / u.hpMax > 0.5 ? '#6fcf7f' : u.hp / u.hpMax > 0.22 ? '#e6d35a' : '#ff5c6c'; sp.append(bar); el.append(sp);
+  }
+  const b = document.createElement('button'); b.className = 'ord-centro'; b.dataset.bt = 'centro'; b.setAttribute('aria-label', 'Centralizar'); b.textContent = '⌖'; el.append(b);
+}
+// ---- HUD do herói (embaixo, sempre visível) ----
+const NOME_COND = { furia: 'Fúria', bencao: 'Bênção', pacificado: 'Pacificado', amedrontado: 'Amedrontado', dormindo: 'Dormindo', caido: 'Caído', paralisado: 'Paralisado', lento: 'Lento', esquivando: 'Esquivando', atordoado: 'Atordoado', maldito: 'Maldito', cego: 'Cego', silenciado: 'Silenciado', enfraquecido: 'Enfraquecido', confuso: 'Confuso', acelerado: 'Acelerado', contido: 'Contido', favor: 'Favor', guiado: 'Guiado', irritado: 'Irritado', vant: 'Vantagem', desacel: 'Desacelerado', banido: 'Banido' };
+let heroSig = '';
+function montarHero(bt, forcar = false) {
+  const el = $('#bt-hero'); if (!el) return; const B = bt.B, H = B.h; if (!H) return;
+  const conds = Object.entries(H.conds || {}).filter(([k, v]) => v && NOME_COND[k]).map(([k]) => NOME_COND[k]); const buffs = Object.values(H.bf || {}).map((b) => b.nome).filter(Boolean);
+  const sig = [Math.ceil(H.hp), H.hpMax, H.tmpHp | 0, H.ca, H.acoes, H.bonus, H.movRest, H.exaust | 0, H.insp | 0, (H.slots || []).join(','), JSON.stringify(H.cont || {}), conds.join(), buffs.join(), H.conc ? H.conc.nome : '', B.rodada].join('|');
+  if (!forcar && sig === heroSig && el.firstChild) return; heroSig = sig;
+  const fr = Math.max(0, Math.min(1, H.hp / H.hpMax)); const cor = fr > 0.5 ? '#3fbf5f' : fr > 0.25 ? '#e6c63a' : '#ff4a5c'; const tmp = H.tmpHp > 0 ? Math.min(1, H.tmpHp / H.hpMax) : 0;
+  const pip = (ok, rot) => `<span class="bh-pip ${ok ? 'on' : 'off'}">${rot}</span>`;
+  el.innerHTML = `<div class="bh"><div class="bh-ret"></div><div class="bh-col">
+    <div class="bh-nome"><span>${esc(H.nome)}</span><small>${esc(bt.s.heroi.cls ? (bt.s.heroi.cls[0].toUpperCase() + bt.s.heroi.cls.slice(1)) : '')} · Nv ${bt.s.heroi.nivel} · Rodada ${B.rodada}</small></div>
+    <div class="bh-hp ${fr <= 0.25 ? 'baixo' : ''}"><i style="width:${(fr * 100).toFixed(1)}%;background:${cor}"></i>${tmp ? `<b class="tmp" style="width:${(tmp * 100).toFixed(1)}%"></b>` : ''}<span>PV ${Math.max(0, Math.ceil(H.hp))} / ${H.hpMax}${H.tmpHp > 0 ? ` (+${H.tmpHp})` : ''}</span></div>
+    <div class="bh-linha"><span class="bh-ca">🛡 CA ${H.ca}</span>${pip(H.acoes > 0, '⚔ Ação')}${pip(H.bonus > 0, '✦ Bônus')}<span class="bh-pip on">👣 ${H.movRest}</span>${H.conc ? `<span class="bh-pip on">◎ ${esc(H.conc.nome)}</span>` : ''}${conds.map((c) => `<span class="bh-cond">${esc(c)}</span>`).join('')}${buffs.slice(0, 3).map((c) => `<span class="bh-cond" style="background:#1a3a4a;color:#c8f0ff">${esc(c)}</span>`).join('')}</div>
+    <div class="bh-rec">${esc(recursosTxt(H))}</div></div></div>`;
+  const r = el.querySelector('.bh-ret'); if (r) { const base = iconeUn(bt, H); const cc = document.createElement('canvas'); cc.width = 40; cc.height = 40; cc.getContext('2d').drawImage(base, 0, 0); r.append(cc); }
+  const h = el.offsetHeight; const ctl = $('#controles'); if (ctl && h) ctl.style.setProperty('--hero-h', h + 'px');
 }
 function recursosTxt(H) {
   const p = []; H.slots.forEach((v, i) => { const mx = (St.S.recursosMax.slots[i] || 0); if (mx > 0) p.push(`${i + 1}º:${v}`); });
@@ -348,10 +382,9 @@ function infoSel(bt) {
   const T2 = u.tmp && u.racional ? ` · ${esc(u.tmp)}` : ''; return `<div class="bt-info"><b>${esc(u.nome)}</b> <span class="suave">ND ${u.cr < 1 ? (u.cr === 0.125 ? '1/8' : u.cr === 0.25 ? '1/4' : '1/2') : u.cr} · CA ${u.ca}${T2}</span><div class="bt-barra"><i style="width:${fr}%;background:${fr > 50 ? '#6fcf7f' : fr > 22 ? '#e6d35a' : '#ff5c6c'}"></i></div><small>${Math.ceil(u.hp)}/${u.hpMax} PV${conf ? ' — toque de novo para atacar' : ''}</small></div>`;
 }
 function montarMenu(bt) {
-  const menu = $('#bt-menu'); if (!menu) return; menu.innerHTML = ''; const B = bt.B, H = B.h;
+  const menu = $('#bt-menu'); if (!menu) return; menu.innerHTML = ''; const B = bt.B, H = B.h; montarHero(bt, true);
   if (bt.fim) { const b = botao(B.fim === 'vitoria' ? 'Continuar' : B.fim === 'derrota' ? 'Voltar à vila' : 'Continuar', bt.aviso || '', () => concluir(bt), { cls: 'bt-larga bt-ok' }); menu.append(b); return; }
   if (bt.ocupado) { menu.append(botao('…', 'toque na tela para acelerar', () => { bt.rapido = true; }, { cls: 'bt-larga' })); return; }
-  const status = document.createElement('div'); status.className = 'bt-status'; status.innerHTML = `<span><b>${esc(H.nome)}</b> PV ${Math.ceil(H.hp)}/${H.hpMax}${H.tmpHp > 0 ? `+${H.tmpHp}` : ''} · CA ${H.ca}${H.conc ? ` · ✦ ${esc(H.conc.nome)}` : ''}</span><span class="pips">Ação ${pip(H.acoes > 0)} Bônus ${pip(H.bonus > 0)} Mov ${H.movRest}</span><small>${esc(recursosTxt(H))}</small>`; menu.append(status);
   if (bt.modo === 'magia' && bt.magia) { painelMira(bt, menu); return; }
   if (bt.sel && bt.modo === 'normal') { const d = document.createElement('div'); d.className = 'bt-infobox'; d.innerHTML = infoSel(bt); menu.append(d); if (bt.confirma && bt.confirma.tipo === 'atq' && bt.sel.eq === 'm') menu.append(botao(`⚔ Atacar ${bt.sel.nome}`, `${H.arma.nome}`, () => atacarEm(bt, bt.sel), { off: H.acoes <= 0, cls: 'sel bt-ok' })); }
   if (bt.menu === 'raiz') {

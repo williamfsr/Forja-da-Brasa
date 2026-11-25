@@ -71,11 +71,12 @@ export function atributos(s) {
 }
 
 // ---------- Estatísticas derivadas do herói ----------
+const bonusPvEquip = (s) => ['ac1', 'ac2'].reduce((t, k) => t + ((s.equip && ITENS[s.equip[k]] && ITENS[s.equip[k]].pvBonus) || 0), 0);
 export function derivar(s) {
   const h = s.heroi, cls = CLASSES[h.cls], L = h.nivel;
   const A = atributos(s), M = {}; for (const a of ATRIBUTOS) M[a] = modAtr(A[a]);
   const prof = bonusProf(L);
-  let hpMax = cls.dado + (L - 1) * (cls.dado / 2 + 1) + L * M.CON + 4 + 2 * L + Math.floor((s.stats.paragon || 0));
+  let hpMax = cls.dado + (L - 1) * (cls.dado / 2 + 1) + L * M.CON + 4 + 2 * L + Math.floor((s.stats.paragon || 0)) + (h.bonusPV || 0) + bonusPvEquip(s);
   hpMax = Math.max(L + 2, Math.round(hpMax));
   if (h.exaustao >= 4) hpMax = Math.max(1, Math.floor(hpMax / 2));
   const armadura = ITENS[s.equip.armadura] || null, escudo = ITENS[s.equip.escudo] || null;
@@ -182,7 +183,7 @@ export function sortearItemBau(s, rng, rar, nivel) {
   return null;
 }
 export function rolarBau(s, rng, { forca = 0, bonus = 0, origem = 'bau' } = {}) {
-  const L = s.heroi.nivel; const dado = d20(rng);
+  const L = s.heroi.nivel; const dado = d20(rng, true);
   const seq = Math.min(5, Math.floor((s.sequencia.atual || 0) / 4));
   const total = dado + forca + bonus + seq;
   let rar = raridadePorRolagem(total); if (dado === 1 && rar > 0) rar = Math.max(0, rar - 1);

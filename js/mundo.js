@@ -119,7 +119,7 @@ registrar('brejo', () => {
 registrar('andarilhos', () => {
   const m = novoMapa('andarilhos', 'Acampamento dos Andarilhos', 28, 22, 'grama', 'vila'); flores(m, 4402, 0.08);
   ret(m, 8, 6, 12, 10, 'terra'); poe(m, 13, 10, 'braseiro'); poe(m, 14, 10, 'braseiro'); poe(m, 12, 12, 'barril'); poe(m, 15, 12, 'barril');
-  const s = pred(m, { x: 11, y: 3, w: 5, h: 4, tel: 'telhadoRx', nome: 'Tenda de Dona Safira', dest: 'tenda_safira' }); caminho(m, s.frente.x, s.frente.y, 13, 9, 'terra');
+  const s = pred(m, { x: 11, y: 3, w: 5, h: 4, tel: 'telhadoRx', nome: 'Tenda de Dona Ordália', dest: 'tenda_ordalia' }); caminho(m, s.frente.x, s.frente.y, 13, 9, 'terra');
   const v = pred(m, { x: 20, y: 12, w: 5, h: 4, tel: 'telhadoPr', nome: 'Mercado dos Vazios', dest: 'tenda_vazia' }); caminho(m, v.frente.x, v.frente.y, 17, v.frente.y, 'terra');
   for (const [x, y] of [[3, 6], [3, 12], [6, 17]]) pred(m, { x, y, w: 4, h: 3, tel: 'telhadoMr', nome: 'Carroça', dest: null, rot: false }); poe(m, 7, 8, 'tenda'); poe(m, 22, 7, 'tenda'); poe(m, 6, 14, 'tenda');
   contorno(m, 'pinheiro', 1); for (const x of [13, 14]) { poe(m, x, 21, 'terra'); poe(m, x, 20, 'terra'); portao(m, x, 21, 'andarilhos', 'Estrada'); } m.spawn = { x: 13, y: 19 }; caminho(m, 13, 19, 13, 16, 'terra'); caminho(m, 14, 19, 14, 16, 'terra');
@@ -237,7 +237,7 @@ registrar('vale', () => {
 export const DESTINOS_VIAGEM = [
   { id: 'casa', nome: 'Sua casa', icone: '🏠', mapa: 'vila/casa', pos: null, desc: 'Cama, espelho, baú e estante.', pre: 'vila' },
   { id: 'vila', nome: 'Praça de Forjaluz', icone: '🔥', mapa: 'vila', pos: { x: 17, y: 22 }, desc: 'A vila da Brasa: forja, arena, biblioteca e taverna.' },
-  { id: 'andarilhos', nome: 'Acampamento dos Andarilhos', icone: '🃏', mapa: 'andarilhos', pos: null, desc: 'Dona Safira e o Baralho do Hábito.', visto: 'andarilhos' },
+  { id: 'andarilhos', nome: 'Acampamento dos Andarilhos', icone: '🃏', mapa: 'andarilhos', pos: null, desc: 'Dona Ordália e o Baralho do Hábito.', visto: 'andarilhos' },
   { id: 'marcha', nome: 'Marcha-Lenta', icone: '🏰', mapa: 'marcha', pos: null, desc: 'A cidade da festa obrigatória.', visto: 'marcha' },
   { id: 'alvorada', nome: 'Alvorada', icone: '⛪', mapa: 'alvorada', pos: null, desc: 'A abadia da Dra. Marcovia.', visto: 'alvorada' },
   { id: 'brejo', nome: 'Brejo de Berez', icone: '🌫️', mapa: 'brejo', pos: null, desc: 'A vila afogada e o barqueiro.', visto: 'brejo' },

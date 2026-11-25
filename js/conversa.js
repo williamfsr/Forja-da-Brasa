@@ -9,21 +9,24 @@ import { ITENS } from './srd.js';
 import { RACAS, MARCAS, ACESSORIOS } from './cosmeticos.js';
 import { ATIT, RACA_L, MARCA_L, ACESS_L, CLASSE_L, QFALAS, VISITAS, DADIVAS, TEO, TOPICOS, SONHOS_INTRO } from './historia2.js';
 import * as Au from './audio.js';
+import { rel as relR, IMUNES, podeRomance, menuRomance, menuRude, modoInimigo, ehInimigo, estaPerdido, bomDia, mudarAfin, perderNpc, reiSabe } from './romance.js';
 
+import { Dados } from './dados.js';
+const ATR_ROT = { FOR: 'Força', DES: 'Destreza', CON: 'Constituição', INT: 'Inteligência', SAB: 'Sabedoria', CAR: 'Carisma' };
 const S = () => St.S; const rnd = (n) => Math.floor(Math.random() * n);
 function ctx() {
   const s = S(), h = s.heroi, ap = h.ap || {}; const d = R.derivar(s);
-  return { s, h, ap, raca: ap.raca || 'humano', cls: h.cls, cap: s.historia.cap, nivel: h.nivel, inercia: s.historia.inercia, moral: s.historia.moral, mod: d.M || {}, marca: MARCAS[ap.marca | 0] || 'Nenhuma', acess: ACESSORIOS[ap.acess | 0] || 'Nenhum', flags: s.historia.flags };
+  return { s, h, ap, raca: ap.raca || 'humano', cls: h.cls, cap: s.historia.cap, nivel: h.nivel, inercia: St.inerciaEf(s), moral: s.historia.moral, mod: d.M || {}, marca: MARCAS[ap.marca | 0] || 'Nenhuma', acess: ACESSORIOS[ap.acess | 0] || 'Nenhum', flags: s.historia.flags };
 }
 const rel = (id) => (S().npcs[id] ||= { afin: 0, ultimo: null });
 const vistos = (id) => (rel(id).v ||= {});
 const efeito = (G, e) => {
   if (!e) return; const s = S(), H = s.historia;
   if (e.moral) H.moral = Math.max(0, Math.min(100, H.moral + e.moral)); if (e.inercia) H.inercia = Math.max(0, Math.min(10, H.inercia + e.inercia));
-  if (e.lore) { const p = Camp.lerPagina(s, e.lore); if (p) G.ui.toast(`📖 Nova página do Diário: ${p.t}`, 4200); } if (e.flag) H.flags[e.flag] = true; if (e.insp) s.heroi.insp = Math.min(3, (s.heroi.insp || 0) + e.insp); if (e.ouro) St.ganharOuro(e.ouro);
+  if (e.lore) { const p = Camp.lerPagina(s, e.lore); if (p) G.ui.toast(`📖 Nova página do Diário: ${p.t}`, 4200); } if (e.flag) H.flags[e.flag] = true; if (e.perde) perderNpc(e.perde); if (e.insp) s.heroi.insp = Math.min(3, (s.heroi.insp || 0) + e.insp); if (e.ouro) St.ganharOuro(e.ouro);
   St.salvar(); G.ui.hud && G.ui.hud();
 };
-function teste(c, atr, dc) { const r = 1 + rnd(20), m = (c.mod && c.mod[atr]) || 0, t = r + m; return { r, m, t, ok: t >= dc, txt: `* d20 ${r}${m >= 0 ? '+' : ''}${m} = ${t} contra CD ${dc} — ${t >= dc ? 'sucesso' : 'falha'}` }; }
+function teste(c, atr, dc) { const r = 1 + rnd(20), m = (c.mod && c.mod[atr]) || 0, t = r + m; Dados.teste20(r, { mod: m, dc, rot: ATR_ROT[atr] || atr, ok: t >= dc }); return { r, m, t, ok: t >= dc, txt: `* d20 ${r}${m >= 0 ? '+' : ''}${m} = ${t} contra CD ${dc} — ${t >= dc ? 'sucesso' : 'falha'}` }; }
 
 // opções "Sobre mim…": cada item usa a personalização do herói e rende afinidade na primeira vez
 function sobreMim(id, c) {
@@ -48,7 +51,8 @@ export async function conversar(G, n, def, pf, ret, nome, extra) {
   if (primeira) aberto.push((RACA_L[c.raca] || RACA_L.humano)[att]); else aberto.push(falas[rnd(falas.length)]);
   if (!primeira && extra && rnd(2) === 0) aberto.push(extra);
   if (!primeira && c.inercia >= 7 && rnd(3) === 0) aberto.push('A Névoa está pesada hoje. Respire fundo antes de seguir.');
-  Au.sfx('select'); await di(aberto);
+  if (estaPerdido(id) || ehInimigo(id)) { Au.sfx('select'); await modoInimigo(G, id, ret, nome); St.salvar(); return false; }
+  Au.sfx('select'); await di(aberto); await bomDia(G, id, ret, nome);
   // quests deste NPC
   const qs = () => Camp.QUESTS.filter((q) => q.npc === id && s.campanha.q[q.id]);
   const pred = n.painel ? { nome: (G.NOME_PAINEL && G.NOME_PAINEL[n.painel]) || 'o balcão' } : null; let abrir = false, sair = false, volta = 0;
@@ -57,14 +61,20 @@ export async function conversar(G, n, def, pf, ret, nome, extra) {
     for (const t of topicos) opc.push({ id: 't:' + t.id, rot: t.rot, tom: t.tom, sub: vistos(id)[t.id] ? 'já conversado' : '' });
     for (const q of qs()) { const e = s.campanha.q[q.id]; opc.push({ id: 'q:' + q.id, rot: e.est === 'feita' ? `Sobre «${q.titulo}» (concluída)` : `Sobre «${q.titulo}»`, tom: q.tipo === 'principal' ? 'Missão' : 'Missão extra' }); }
     if (pred) opc.push({ id: 'serv', rot: serviçoFala(n.painel), tom: 'Serviço' });
+    if (id === 'safira' && G.lojaSafira && c.flags.rei_derrotado) opc.push({ id: 'lojaS', rot: 'Ver as mercadorias de cura.', tom: 'Serviço' });
     opc.push({ id: 'eu', rot: 'Falar de mim…', tom: 'Você' });
+    if (podeRomance(id)) opc.push({ id: 'rom', rot: 'Romance…', tom: '💞', sub: `Romance ${r.rom | 0}/15 · Afinidade ${r.afin}${S().historia.par && S().historia.par.id === id ? (S().historia.par.tipo === 'casado' ? ' · 💍 casados' : ' · 💞 namorando') : ''}` });
     if (pf && pf.afin) opc.push({ id: 'papo', rot: 'Bater um papo.', sub: r.ultimo === hoje ? `Afinidade ${r.afin} ♥ (já conversaram hoje)` : `Afinidade ${r.afin} ♥ · +1 por dia`, tom: 'Relação' });
+    if (!IMUNES.has(id)) opc.push({ id: 'rude', rot: 'Ser grosseiro…', tom: 'Risco' });
     opc.push({ id: 'sair', rot: 'Até logo.' });
     const resp = await ui.dialogoEscolha({ nome, retrato: ret, texto: volta++ ? (pf && pf.gosta ? pf.gosta : 'Algo mais?') : (pf && pf.gosta ? pf.gosta : 'No que posso ajudar?'), opcoes: opc });
     if (resp === 'sair') { sair = true; await di(['» Até logo.', att ? 'Vá com cuidado.' : 'Volte sempre.']); }
     else if (resp === 'serv') { abrir = true; sair = true; await di([`» ${serviçoFala(n.painel)}`, 'Claro. Fique à vontade.']); }
+    else if (resp === 'lojaS') await G.lojaSafira(G, ret, nome);
     else if (resp === 'papo') await papo(G, n, def, pf, ret, nome);
     else if (resp === 'eu') await menuEu(G, id, c, ret, nome);
+    else if (resp === 'rom') await menuRomance(G, id, ret, nome);
+    else if (resp === 'rude') { await menuRude(G, id, ret, nome); if (ehInimigo(id)) sair = true; }
     else if (resp.startsWith('t:')) {
       const t = topicos.find((x) => 't:' + x.id === resp); if (!t) continue; vistos(id)[t.id] = true;
       if (t.teste) { const tt = teste(c, t.teste.atr, t.teste.dc); await di([`» ${t.rot}`, tt.txt, ...(tt.ok ? t.ok : t.falha)]); if (tt.ok) efeito(G, t.ef); }
@@ -88,7 +98,7 @@ async function darRecompensaAfin(G, afin, id, nome, ret) {
 async function papo(G, n, def, pf, ret, nome) {
   const a = rel(n.id), hoje = St.hoje();
   if (a.ultimo === hoje) { await G.ui.dialogo(nome, ['» Podemos conversar mais?', 'Já conversamos hoje. Volte amanhã — sempre tenho mais uma história.'], { retrato: ret }); return; }
-  a.ultimo = hoje; a.afin = Math.min(12, a.afin + 1); const linha = pf.afin[(a.afin - 1) % pf.afin.length]; await G.ui.dialogo(nome, ['» Me conta mais sobre você.', linha], { retrato: ret });
+  a.ultimo = hoje; a.afin = Math.min(12, a.afin + 1); const linha = pf.afin[((Math.max(1, a.afin) - 1) % pf.afin.length)]; await G.ui.dialogo(nome, ['» Me conta mais sobre você.', linha], { retrato: ret });
   await darRecompensaAfin(G, a.afin, n.id, nome, ret); St.salvar(); G.ui.hud();
 }
 async function falarMissao(G, npcId, qid, c, ret, nome) {
@@ -101,12 +111,13 @@ async function falarMissao(G, npcId, qid, c, ret, nome) {
 // ---- Visitas do Rei ----
 export function visitaPendente() {
   const s = S(); if (!s) return null; const H = s.historia; const v = (H.vistos ||= {}); const n = v.visitas | 0; const hoje = St.hoje();
+  if (v.visitaDia !== hoje) { const esp = reiSabe(); if (esp) return esp; }
   const st = s.stats || {}; if (!(st.series || st.cardioMin || st.estudoMin || (H.limpos && H.limpos.length))) return null;
   if (n >= VISITAS.length || v.visitaDia === hoje || H.cap > 20) return null; const V = VISITAS[n]; if (s.heroi.nivel < V.nv) return null;
   if (n > 0 && H.inercia < 3 && (hoje.charCodeAt(hoje.length - 1) % 2)) return null; return V;
 }
 export async function visitaDoRei(G) {
-  const V = visitaPendente(); if (!V) return false; const s = S(), H = s.historia, v = H.vistos; v.visitaDia = St.hoje(); v.visitas = (v.visitas | 0) + 1; St.salvar(); G.ocupado = true;
+  const V = visitaPendente(); if (!V) return false; const s = S(), H = s.historia, v = H.vistos; v.visitaDia = St.hoje(); if (V.especial) H.flags[V.flag] = true; else v.visitas = (v.visitas | 0) + 1; St.salvar(); G.ocupado = true;
   Au.tocarMusica && Au.tocarMusica('chefe'); const nome = 'Nhor-Kaal · Rei da Inércia';
   const ret = (G.retratoNhor && G.retratoNhor()) || null;
   await G.ui.dialogo(nome, V.txt, { retrato: ret });

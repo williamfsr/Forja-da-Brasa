@@ -5,7 +5,7 @@ const P = (w, h, fn) => { const p = new Pix(w, h); fn(p); return p; };
 const hasS = (v) => v >= 0; void hasS;
 // sombra elíptica suave sob o objeto (desenhada atrás do sprite)
 export function comSombra(c, cx, cy, rx, ry, a = 0.32) {
-  const o = cv(c.width, c.height), x = o.getContext('2d'); x.fillStyle = `rgba(10,6,20,${a})`; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.fill(); x.drawImage(c, 0, 0); return o;
+  const o = cv(c.width, c.height), x = o.getContext('2d'); x.fillStyle = `rgba(10,6,20,${(a * 0.55).toFixed(3)})`; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.fill(); x.drawImage(c, 0, 0); o.limpo = c; o.base = cy; return o; // limpo/base: a sombra dinâmica (luz.js) projeta a silhueta a partir do pé
 }
 const folhas = (p, cx, cy, r, cor, sem) => { p.ell(cx, cy, r, r * 0.9, cor); const R = rampa(cor); for (let i = 0; i < r * 2.2; i++) { const a = hash2(i, sem, 3) * 6.28, d = hash2(i, sem, 5) * r * 0.7; p.set(cx + Math.cos(a) * d - r * 0.15, cy + Math.sin(a) * d - r * 0.25, i % 3 ? R.h : R.h2); } for (let i = 0; i < r; i++) { const a = hash2(i, sem, 9) * 6.28, d = hash2(i, sem, 11) * r * 0.6; p.set(cx + Math.cos(a) * d + r * 0.2, cy + Math.sin(a) * d + r * 0.3, R.s2); } };
 

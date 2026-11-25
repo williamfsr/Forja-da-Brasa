@@ -73,11 +73,24 @@ Depois da primeira abertura o jogo roda sem internet.
 
 > Os dados de treino e alimentação são sugestões de jogo, **não** orientação médica ou nutricional. Respeite seus limites e dias de descanso.
 
+## v6 — Luz, clima, tela cheia, hábitos e dados
+
+- **Tela cheia + controles sobrepostos:** o jogo ocupa a tela inteira; D-pad, **A**, **B** e **MENU** ficam translúcidos por cima. Com o celular **na horizontal**, o D-pad vai para o lado esquerdo e **A/B para o direito**. A câmera considera o que está coberto, então o herói e os alvos ficam sempre na parte livre.
+- **Desktop:** sem botões. **WASD** move, **clique esquerdo = A** (interagir/atacar, inclusive **selecionar** o alvo no ataque), **clique direito = B** (voltar/menu). **M** abre o menu.
+- **Combate:** **ordem de iniciativa no topo** (retrato frontal de cada um, destaque de quem joga) e **vida, CA, ações, movimento, condições e recursos do herói embaixo**, bem grandes.
+- **Dados animados:** toda rolagem mostra os dados girando. Em combate é uma animação **pequena no canto direito**; fora do combate (conversas, testes de perícia, armadilhas) é **grande no centro**, como na abertura de baú. A legenda mostra d20 + modificador, a CD e o resultado; o diálogo espera o dado parar.
+- **Hábitos (menu → 🌱 Hábitos):** **aderir** a hábitos de um catálogo (Corpo, Mente, Alma, Rotina) ou **criar o seu**, marcar o que fez no dia (XP uma vez por dia, com **sequência 🔥**) e **retirar** os que não servem mais. Hábitos rendem até **120 XP por dia** (acima disso continuam contando como atividade).
+- **Luz e sombras dinâmicas:** sol e lua seguem o **relógio do aparelho**. A direção e o comprimento das sombras mudam ao longo do dia (longas no amanhecer e no entardecer, curtas ao meio-dia, fracas à noite com a lua) e valem para **árvores e objetos, construções, NPCs, monstros e o herói**. Cada fase tem seu **tom e nível de contraste**: amanhecer rosado, manhã dourada, meio-dia de contraste alto, tarde, entardecer laranja, anoitecer roxo e noite azul.
+- **Sombras de qualquer fonte de luz:** braseiros, portas acesas, a **lanterna do herói**, **lareiras e fogões** dos interiores e as **tochas das masmorras** também projetam sombra, sempre **apontando para longe da luz**, mais fracas e compridas conforme a distância. Quando você anda, as sombras ao redor giram junto. Paredes e móveis dos interiores e as paredes das masmorras sombreiam o chão ao lado delas.
+- **Clima ligado à Inércia:** Inércia baixa = céu aberto e dourado; subindo vêm **nuvens, garoa, chuva, tempestade (com raios e trovões) e neblina**, com sombras de nuvem no chão e a luz esfriando. Com Inércia alta a luz fica **grave e tenebrosa** (cresce a partir da 4 e chega ao máximo na 10): tom roxo doentio, escuridão pesada em que só a lanterna do herói (que encolhe) ilumina, vinheta que respira, **sombras que balançam e se esticam**, cinzas caindo, neblina de fundo, raios mais frequentes e clarões violeta distantes mesmo sem tempestade. Nas masmorras a luz também encolhe e o escuro aperta. O tempo é sorteado por dia e bloco de 3 horas e muda suave quando a Inércia muda. Não chove dentro de casas nem de masmorras.
+- **Céu do Vale (menu → Livro):** mostra a fase do dia, o tempo atual, o contraste e as sombras, e deixa **pré-visualizar** outra hora, o **⏩ dia acelerado** (24 h em cerca de 1 minuto, para ver as sombras girarem) ou outro clima, só naquela sessão (não altera o jogo).
+
 ## Estrutura
 
 ```
 index.html · manifest.webmanifest · sw.js · css/ · js/ · icons/
 js/srd.js          regras SRD (classes, magias, monstros, exaustão)
+js/romance.js · festa.js · minigames.js · safira.js · paineis4.js   v5: afinidade/romance/inimizade, festa do 0/10, minigames, Safira, painel Relações
 js/rules.js        mapeamento vida real → personagem, raças, escala de dificuldade
 js/tatico.js       motor de combate tático (iniciativa, mapa, áreas, IA, persuasão e magias sociais), sem DOM
 js/batalha.js      controle de batalha na tela (toque, menus, animações)
@@ -88,6 +101,8 @@ js/personalidade.js  temperamentos, frases e perfis de NPCs · js/encontros.js  
 js/criador.js      editor de aparência
 js/dungeon.js      gerador procedural de masmorras · js/world.js  fachada dos mapas
 js/locais.js       biblioteca de construção de mapas (vista de cima), 23 interiores e registro de mapas · js/mundo.js  Forjaluz, vilas, Cidadela e o Vale de 104×80 casas
+js/luz.js · clima.js · relogio.js   v6: sol/lua, sombras projetadas, contraste por hora, luzes da noite · clima pela Inércia (chuva, raios, neblina)
+js/dados.js · habitos.js   v6: dados animados em toda rolagem · aba Hábitos
 js/vida.js         mundo vivo/morto (cor, árvores secas, cinzas, vagalumes) conforme a sua rotina
 js/conversa.js · js/historia2.js  cena de diálogo, árvores de conversa, falas de missão, visitas do Rei, sonhos, dádivas e Teo
 js/interacoes.js · js/paineis3.js  móveis/placas interativos · viagem rápida e Mapa do Vale
@@ -118,12 +133,21 @@ Testes de balanceamento do combate: `node tools/simtat.mjs`. Para regenerar o `s
 - **Sua personalização importa:** raça, marcas, acessórios, altura, classe e capa geram falas próprias em *Falar de mim…*, mudam como cada NPC reage e rendem **afinidade** (recompensas aos 3, 6 e 10 pontos).
 - Cada NPC tem tópicos (rumores do mapa, o passado do Rei, relações entre eles) e **falas de missão** que mudam entre ativa e concluída. NPCs com missão ativa ganham um **!** dourado.
 - **Visitas do Rei:** de tempos em tempos Nhor-Kaal aparece para conversar (6 encontros, de acordo com o seu nível) — recusar, perguntar ou ceder mexe com moral e Inércia. Os **sonhos** ao dormir em casa revelam as páginas do Diário. O **Templo Âmbar** oferece dádivas sem esforço; recusar três vezes abre o altar escondido. **Teo** só levanta se você se mexeu hoje.
-- A estrutura espelha, de forma original, a de um gótico-vampírico clássico: um mal que **conversa e observa**, vilas que negam o medo (Marcha-Lenta e sua festa), uma leitora de cartas (Safira e o Baralho), caçadores de monstros (Rictus, Calíope), uma fortaleza de cavaleiros amaldiçoados (Hornfel), um templo de dádivas, e o confronto no trono. Tudo gira em torno de **Nhor-Kaal** como o original gira em torno de seu vilão.
+- A estrutura espelha, de forma original, a de um gótico-vampírico clássico: um mal que **conversa e observa**, vilas que negam o medo (Marcha-Lenta e sua festa), uma leitora de cartas (Ordália e o Baralho), caçadores de monstros (Rictus, Calíope), uma fortaleza de cavaleiros amaldiçoados (Hornfel), um templo de dádivas, e o confronto no trono. Tudo gira em torno de **Nhor-Kaal** como o original gira em torno de seu vilão.
+
+## v5 — Maré, Festa, Relações e Safira
+
+- **A Maré da Inércia começa em 9/10** e o mundo nasce devastado (cinzento, morto). A **primeira atividade do dia** (série, aeróbico, estudo ou hábito) baixa 1 ponto; dia perfeito e Tríplice Coroa baixam mais 1; dia sem atividade sobe 1. Quanto menor, mais cor e vida volta ao Vale e à vila. Jogos já salvos mantêm a Maré atual; novos jogos e novos ciclos começam em 9.
+- **Chegou em 0/10 → Festa da Brasa (24 h).** Mestra Brasa vem até você, parabeniza e avisa que o esforço não pode parar: o Rei da Inércia ainda está de pé e, sem as atividades, tudo volta a piorar. A praça ganha bandeirolas, lanternas e confete; os 12 moradores vão para lá. Em cada um você pode **curtir a festa** (+1 afinidade) e jogar **minigames opcionais** (queda de braço, tiro ao alvo, receita da Tavi, quiz da Eruvim, dança) que rendem afinidade extra e ouro. Falou com todos → **Capa do Herói** (equipada automaticamente). Depois das 24 h tudo volta ao normal; a festa acontece uma vez por ciclo.
+- **Relações (menu → 💞 Relações):** barras de afinidade (−10 a 12), romance (0–15) e inimizade (0–10). Com **afinidade 5** surge *Romance…* para quem combina com o seu **interesse romântico** (padrão: sexo oposto ao do herói; dá para mudar no painel). Flertar (teste de Carisma, 1 por dia), presentear e treinar juntos enchem a barra. **Romance 10 → namoro. Romance 15 → casamento** (Aliança de Brasa +8 PV, cônjuge mora na casa e dá bom-dia).
+- **Consequências:** dar em cima de outra pessoa pede confirmação — sem par, o romance e parte da afinidade da primeira se perdem; **com par, o namoro/casamento termina, a afinidade fica negativa e nasce uma barra de inimizade**. Opções grosseiras (zombar, ameaçar, furtar) reduzem afinidade; em **−5** começa uma inimizade (o NPC passa a evitar, só aceita pedido de desculpas ou provocação). O Rei da Inércia fica sabendo: comenta o seu par e **se oferece para "calar" inimigos** (eles são levados pela Névoa, com custo em moral e Maré).
+- **Safira** (cabelo e túnica roxos): só aparece na vila **às quintas-feiras**; não é romanceável nem gera inimizade antes do Rei cair. Quatro conversas (uma por quinta, sem afinidade) contam a sua história; ao fim você compra um **Sino da Aurora** (zera a Maré *efetiva* por 1 dia — caro: cerca de 30 dias de ouro do seu nível; o Maior dura 3 dias e custa ~70). Ela então critica você por não lidar sozinho com a Inércia e fica **sem nada a oferecer até o Rei da Inércia cair**. Depois da vitória há um diálogo especial de parabéns, ela passa a ser **romanceável** e vende **cura e vida máxima** (Elixir do Alvorecer, Bênção de Cura, Tônico da Vitalidade, Medalhão de Safira).
+- A antiga leitora de cartas agora se chama **Dona Ordália** (a Safira é outra personagem); saves antigos são migrados sozinhos.
 
 ## Campanha, Diário e fim de jogo
 
 - **22 missões** (10 principais + 12 secundárias) que pedem esforço real: séries, aeróbico, estudo, refeições na meta, dias perfeitos, PRs, além de masmorras. Veja tudo no menu **Diário**.
-- **Baralho do Hábito:** depois da missão de Dona Safira, a leitura (muda a cada ciclo) revela em que capítulos estão a **Lâmina Solar**, o **Símbolo do Alvorecer**, o **Diário de Nhor** e um **aliado**. Cada relíquia enfraquece o Rei da Inércia no capítulo 20.
+- **Baralho do Hábito:** depois da missão de Dona Ordália, a leitura (muda a cada ciclo) revela em que capítulos estão a **Lâmina Solar**, o **Símbolo do Alvorecer**, o **Diário de Nhor** e um **aliado**. Cada relíquia enfraquece o Rei da Inércia no capítulo 20.
 - **20 páginas do Diário de Nhor-Kaal** contam a tragédia do vilão (e por que a constância é a fraqueza dele).
 - **XP só vem da vida real:** treino, aeróbico, estudo e alimentação (mais missões diárias/hábitos). Combate, chefes e masmorras dão ouro, itens e história, **não XP**.
 - Ao zerar a campanha você escolhe: **Laço do Tempo** (recomeça com monstros +12%) ou **Explorador de Catacumbas** (andares infinitos com todo o bestiário, até ND 30).

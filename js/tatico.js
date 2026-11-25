@@ -54,7 +54,7 @@ function unidadeHeroi(s, pos, rng, tem) {
   const ex = h.exaustao || 0; let vel = (raca.vel || 6) + (h.cls === 'barbaro' && h.nivel >= 5 ? 1 : 0); if (ex >= 2) vel = Math.max(2, Math.floor(vel / 2));
   const u = { id: 'h', eq: 'j', heroi: true, nome: h.nome, cls: h.cls, L: h.nivel, hp: Math.min(h.hp ?? D.hpMax, D.hpMax), hpMax: D.hpMax, hpMaxMod: 0, maest: CLASSES_MAESTRIA.includes(h.cls) ? maestriaDe(D.arma) : null, ca: D.ca, caBase: D.ca, prof: D.prof, M: D.M, A: D.A,
     arma: D.arma, ataques: D.ataques, critMin: D.critMin, modAtq: D.modAtq, modDano: D.modDano, cd: D.cd, atqMagia: D.atqMagia, modConj: D.modConj, conj: D.conj,
-    ini: D.ini - (h.sono ? 2 : 0), slots: rec.slots, cont: rec.cont, insp: h.insp || 0, exaust: ex, regen: D.regen, resFogo: D.resFogo || !!raca.resFogo, conds: {}, letargia: 0,
+    ini: D.ini - (h.sono ? 2 : 0), curaB: h.bonusCura || 0, slots: rec.slots, cont: rec.cont, insp: h.insp || 0, exaust: ex, regen: D.regen, resFogo: D.resFogo || !!raca.resFogo, conds: {}, letargia: 0,
     acoes: 1, bonus: 1, reacao: 1, esq: false, bf: {}, tmpHp: 0, conc: null, primeiro: true, implacavel: 0, raca, raçaId: (h.ap && h.ap.raca) || 'humano', ap: h.ap || null, vel, movRest: 0, x: pos.x, y: pos.y, vivo: true, saiu: false, atq: [], esp: {}, tags: ['heroi'], cr: 0, desengajou: false, sopro: true, fugiu: false, racialUsado: false };
   void rng; void tem; return u;
 }
@@ -66,7 +66,7 @@ export function novaBatalha(s, inimigos, g, opts = {}) {
   (opts.aliados || []).forEach((a, i) => { const p = (pos.aliados || [])[i] || livreProximo(B, hp.x, hp.y, 3); const u = unidadeMonstro(a, 'j', 'a' + i, p, rng); u.ini = 2; u.aliadoFixo = true; u.saveBonus = a.saveBonus ?? (2 + Math.floor((s.heroi.nivel || 1) / 3)); B.un.push(u); });
   inimigos.forEach((m, i) => { const p = (pos.ini || [])[i] || livreProximo(B, hp.x + 6, hp.y, 5); const u = unidadeMonstro(m, 'm', 'm' + i, p, rng); if (m.chefe) B.chefe = true; if (B.surpresa) u.conds.surpreso = true; B.un.push(u); });
   const evPre = []; aplicarProntos(B, h, evPre); const evs = [];
-  for (const u of B.un) u.rolagem = d20(rng) + u.ini + (u.heroi && u.exaust >= 2 ? -99 : 0) + (u.heroi && !B.surpresa ? 0 : 0);
+  for (const u of B.un) u.rolagem = d20(rng, !u.heroi) + u.ini + (u.heroi && u.exaust >= 2 ? -99 : 0) + (u.heroi && !B.surpresa ? 0 : 0);
   B.ordem = [...B.un].sort((a, b) => b.rolagem - a.rolagem || (b.ini - a.ini)).map((u) => u.id);
   if (B.surpresa) evs.push(msg('Você pegou o inimigo de surpresa!'));
   evs.push({ t: 'ordem', ordem: [...B.ordem] }); evs.push(...evPre);
@@ -494,7 +494,7 @@ export function agir(B, cmd) {
 const ANCESTRAIS_DANO = { fogo: 'fogo', raio: 'elétrico', veneno: 'veneno', gelo: 'gelo', acido: 'ácido' };
 function usarItem(B, u, idx, alvo, evs) {
   const slot = B.inv[idx]; if (!slot || slot.n <= 0) return false; const it = ITENS[slot.id]; if (!it || it.tipo !== 'consumivel') return false;
-  if (it.cura) { const a = alvo && alvo.eq === 'j' && cheb(alvo, u) <= 1 ? alvo : u; evs.push(msg(`Você usa ${it.nome}.`, 'heal')); cura(B, a, rolar(it.cura, B.rng).total, evs); }
+  if (it.cura) { const a = alvo && alvo.eq === 'j' && cheb(alvo, u) <= 1 ? alvo : u; evs.push(msg(`Você usa ${it.nome}.`, 'heal')); cura(B, a, rolar(it.cura, B.rng).total + (u.curaB || 0), evs); }
   else if (it.dano) { if (!alvo || cheb(alvo, u) > 6) { evs.push(msg('Escolha um alvo a até 6 casas.')); return false; } if (it.alvoTp && !it.alvoTp.some((t) => (alvo.tags || []).includes(t) || alvo.tp === t)) { evs.push(msg('Isso só faz efeito em mortos-vivos e ínferos.')); return false; } evs.push(msg(`Você arremessa ${it.nome}!`, 'hit')); evs.push({ t: 'atq', de: u.id, para: alvo.id, tipo: 'dist' }); const rol = rolar(it.dano, B.rng).total; const R = tilesCirculo(B, alvo.x, alvo.y, 1); const set = new Set(R.map(([x, y]) => K(x, y))); evs.push({ t: 'aoe', de: u.id, forma: 'circulo', tiles: R, dano: it.danoTipo || 'fogo', tx: alvo.x, ty: alvo.y }); for (const a of B.un.filter((x) => x.vivo && !x.saiu && set.has(K(x.x, x.y)) && x !== u)) dano(B, a, a === alvo ? rol : Math.floor(rol / 2), it.danoTipo, evs, false, u); }
   else if (it.magia) { const t = alvo || u; u.slots[it.nvMagia - 1] = (u.slots[it.nvMagia - 1] || 0) + 1; conjurar(B, u, it.magia, it.nvMagia, t.x, t.y, evs); }
   else if (it.fuga) { if (B.chefe) evs.push(msg('O chefe ignora a fumaça!')); else { u.fugiu = true; B.fim = 'fuga'; evs.push(msg('Você some em uma nuvem de pó.', 'flee')); } }

@@ -12,6 +12,9 @@ import { montarEditor } from './criador.js';
 import * as Camp from './campanha.js';
 import { QLUG } from './historia2.js';
 import { LUG } from './world.js';
+import * as Luz from './luz.js';
+import * as Clima from './clima.js';
+import { horaForcada, forcarHora, acelerar, diaAcelerado } from './relogio.js';
 
 // ======================= MENU =======================
 registrar('menu', {
@@ -19,7 +22,7 @@ registrar('menu', {
   render() {
     const T = (id, em, n) => `<button class="tile" data-act="ir" data-id="${id}"><span class="em">${em}</span>${n}</button>`;
     const noVale = G.modo === 'vale', naMasmorra = G.modo === 'masmorra';
-    return `<p class="suave">Registre a vida real aqui, de qualquer lugar. As lojas e o templo ficam na vila.</p><div class="grade3">${T('arena', '🏋️', 'Arena de Ferro')}${T('trilha', '🏃', 'Trilha')}${T('biblioteca', '📚', 'Biblioteca')}${T('taverna', '🍖', 'Taverna')}${T('missoes', '📜', 'Missões')}${T('livro', '📖', 'Livro')}${T('diario', '🗺️', 'Diário')}${St.der().conj ? T('grimorio', '✨', 'Grimório') : ''}${T('casa', '🏠', 'Casa / Ficha')}${T('ajuda', '❓', 'Como jogar')}</div>
+    return `<p class="suave">Registre a vida real aqui, de qualquer lugar. As lojas e o templo ficam na vila.</p><div class="grade3">${T('arena', '🏋️', 'Arena de Ferro')}${T('trilha', '🏃', 'Trilha')}${T('biblioteca', '📚', 'Biblioteca')}${T('taverna', '🍖', 'Taverna')}${T('missoes', '📜', 'Missões')}${T('livro', '📖', 'Livro')}${T('diario', '🗺️', 'Diário')}${T('coracoes', '💞', 'Relações')}${T('habitos', '🌱', 'Hábitos')}${St.der().conj ? T('grimorio', '✨', 'Grimório') : ''}${T('casa', '🏠', 'Casa / Ficha')}${T('ajuda', '❓', 'Como jogar')}</div>
     ${!naMasmorra ? '<div class="linha" style="gap:6px"><button class="btn bloco" data-act="ir" data-id="viagem">🧭 Viagem rápida</button><button class="btn bloco" data-act="ir" data-id="mapa">🗺️ Mapa do Vale</button></div>' : ''}${naMasmorra ? '<button class="btn ruim bloco" data-act="sair">🚪 Sair da masmorra</button>' : ''}`;
   },
   acoes: {
@@ -104,13 +107,23 @@ registrar('casa', {
 
 // ======================= LIVRO DA AVENTURA =======================
 const linhasCap = (cap, flags) => cap.intro.filter((l) => typeof l === 'string' || flags[l.se]).map((l) => (typeof l === 'string' ? l : l.t));
+
+const HORAS_PREV = [['auto', 'Agora', null], ['acel', '⏩ Dia acelerado', 'acel'], ['am', '🌅 Amanhecer', 6.2], ['md', '☀️ Meio-dia', 12.5], ['en', '🌇 Entardecer', 17.6], ['no', '🌙 Noite', 22]];
+const TEMPOS_PREV = [['auto', 'Automático', null], ['limpo', '☀️ Limpo', 'limpo'], ['chuva', '🌧️ Chuva', 'chuva'], ['tempestade', '⛈️ Tempestade', 'tempestade'], ['nebdensa', '🌫️ Neblina', 'nebdensa']];
+function ceuCard() {
+  const I = St.inerciaEf(S()); const d = Luz.descricao(); const hf = horaForcada(), tf = Clima.Clima.forcado; const chip = (a, id, nome, on) => `<button class="btn peq ${on ? 'pri' : ''}" data-act="${a}" data-id="${id}" style="margin:0 4px 4px 0">${nome}</button>`;
+  const tom = I >= 9 ? 'A luz é doentia e as sombras se esticam: a Inércia sufoca o Vale.' : I >= 7 ? 'O céu fecha, a luz esfria e a tempestade ronda.' : I >= 5 ? 'Nuvens, garoa e neblina: o Vale começa a ficar cinza.' : I >= 3 ? 'O céu oscila entre aberto e nublado.' : 'Céu aberto e luz dourada: a Brasa está forte.';
+  return `<div class="card"><h4><span>🌦️ Céu do Vale</span><b>${esc(d.fase)} · ${esc(Clima.nomeClima())}</b></h4><p class="peq suave">${tom}</p><p class="peq">Luz de ${d.astro === 'lua' ? 'lua' : 'sol'}, contraste <b>${d.contraste}</b>, sombras <b>${d.sombras}</b>. A hora segue o relógio do seu aparelho; o tempo muda com a Inércia (${I}/10).</p>
+  <p class="peq suave" style="margin-top:6px">Pré-visualizar (só nesta sessão, não altera o jogo):</p><div>${HORAS_PREV.map(([k, n, h]) => chip('previa-hora', k, n, h === null ? hf == null : h === 'acel' ? diaAcelerado() : !diaAcelerado() && hf != null && Math.abs(hf - h) < 0.01)).join('')}</div><div>${TEMPOS_PREV.map(([k, n, t]) => chip('previa-tempo', k, n, t === null ? !tf : tf === t)).join('')}</div></div>`;
+}
 registrar('livro', {
   titulo: 'Livro da Aventura',
   render() {
     const s = S(), H = s.historia; const ativo = St.capituloDisponivel(); const fim = H.final;
     const meter = (v, max, cls) => `<div class="prog ${cls}"><i style="width:${pct(v, max)}%"></i></div>`;
     return `<div class="card"><h4><span>🏘️ Moral da Vila</span><b>${H.moral}/100</b></h4>${meter(H.moral, 100, 'azul')}<p class="peq suave">Sobe com decisões generosas e dias perfeitos. Moral alta baixa os preços das lojas e define o final.</p>
-    <h4><span>🌑 Maré da Inércia</span><b>${H.inercia}/10</b></h4>${meter(H.inercia, 10, '')}<p class="peq suave">Sobe a cada dia sem atividade; desce com dias perfeitos. Em 7+ os monstros ganham força; em 10 o Rei acorda furioso. ${H.inercia >= 7 ? '<b class="verm">Cuidado!</b>' : ''}</p></div>
+    <h4><span>🌑 Maré da Inércia</span><b>${H.inercia}/10</b></h4>${meter(H.inercia, 10, '')}<p class="peq suave">O Vale começa devastado (9/10). A primeira atividade do dia, a Tríplice Coroa e o dia perfeito baixam a Maré; cada dia parado a faz subir. Em 7+ os monstros ganham força; em 10 o Rei acorda furioso. ${H.inercia >= 7 ? '<b class="verm">Cuidado!</b>' : ''}${H.selo && St.hoje() <= H.selo.ate ? `<br><b>🔔 Selo da Aurora ativo até ${esc(H.selo.ate.split('-').reverse().join('/'))}: o mundo respira como se fosse 0/10 (o valor real continua ${H.inercia}).</b>` : ''}${H.inercia === 0 ? '<br><b>✨ 0/10! Mas o Rei ainda espera. Se você parar, a Névoa volta.</b>' : ''}</p></div>
+    ${ceuCard()}
     ${fim ? `<div class="card" style="border-color:var(--ouro)"><h4><span>${esc(FINAIS[fim].nome)}</span></h4>${FINAIS[fim].txt.map((t) => `<p>${esc(t)}</p>`).join('')}<button class="btn pri bloco" data-act="ciclo">⏳ Laço do Tempo: recomeçar (+12% de dificuldade)</button><button class="btn bloco" data-act="explorador">🗝️ ${s.campanha.modo === 'explorador' ? 'Modo Explorador ativo' : 'Virar Explorador de Catacumbas'}</button></div>` : ''}
     <button class="btn bloco" data-act="prologo">📜 Reler o prólogo</button>
     <h3>Capítulo atual</h3>${ativo ? (() => { const c = CAPITULOS[ativo - 1]; return `<div class="card" style="border-color:var(--brasa)"><h4><span>Cap. ${c.n} — ${esc(c.titulo)}</span></h4><p class="peq suave">${esc(ATOS[c.ato - 1].nome)} · ${esc(c.local)} · ${c.andares} andares${H.checkpoint[c.n] ? ` · checkpoint: andar ${H.checkpoint[c.n]}` : ''}</p>${linhasCap(c, H.flags).map((t) => `<p class="peq">${esc(t)}</p>`).join('')}<p class="peq suave">Chefe: <b>${esc(c.boss.nome)}</b>. ${G.modo === 'vila' ? 'Use o Portal ao norte ou abra o Mapa do Vale.' : 'Abra o Mapa do Vale e siga a entrada marcada com ❗.'}</p></div>`; })() : fim ? '<p class="suave">Todos os capítulos foram concluídos.</p>' : `<p class="suave">Nenhum capítulo disponível agora: suba de nível com a vida real!</p>`}
@@ -119,6 +132,8 @@ registrar('livro', {
   acoes: {
     prologo: async () => { fecharPainel(); await G.ui.dialogo('Prólogo', PROLOGO); },
     ciclo: async () => { const ok = await confirmar('Laço do Tempo?', 'Os capítulos e as missões recomeçam, com monstros 12% mais fortes. Você mantém nível, itens e ouro.', 'Voltar no tempo', 'Cancelar'); if (ok) { St.novoCiclo(); rerender(); } },
+    'previa-hora': (el) => { const o = HORAS_PREV.find((x) => x[0] === el.dataset.id); if (o && o[2] === 'acel') acelerar(true); else forcarHora(o ? o[2] : null); rerender(); },
+    'previa-tempo': (el) => { const o = TEMPOS_PREV.find((x) => x[0] === el.dataset.id); Clima.forcarClima(o ? o[2] : null); rerender(); },
     explorador: () => { St.escolherModoFinal('explorador'); toast('Catacumbas infinitas com todo o bestiário. Você pode voltar à campanha a qualquer momento.'); rerender(); },
   },
 });
@@ -141,7 +156,7 @@ registrar('diario', {
       h += `<h3>Concluídas (${fe.length}/${Camp.QUESTS.length})</h3>${fe.map(cartaQuest).join('') || '<p class="suave">Ainda não há missões concluídas.</p>'}`;
       h += `<h3>A descobrir</h3>${bloqueadas.slice(0, 6).map((q) => `<div class="lista-item" style="opacity:.55"><span class="fixo">🔒</span><div class="nome"><b>${esc(q.titulo)}</b><small>${q.tipo === 'principal' ? 'Principal' : 'Secundária'} · nível ${q.nv}</small></div></div>`).join('')}`;
     } else if (diarioAba === 'baralho') {
-      if (!L) h += '<p class="suave">Dona Safira ainda não leu o Baralho do Hábito para você. Conclua a missão <b>O Baralho do Hábito</b> (nível 5).</p>';
+      if (!L) h += '<p class="suave">Dona Ordália ainda não leu o Baralho do Hábito para você. Conclua a missão <b>O Baralho do Hábito</b> (nível 5).</p>';
       else {
         const linha = (k, nomeRel, cap, dica, ok) => `<div class="card"><h4><span>${ok ? '✅' : '🃏'} ${esc(nomeRel)}</span><small>${cap ? 'Cap. ' + cap + ' — ' + esc(Camp.SITIOS[cap].nome) : ''}</small></h4><p class="peq suave">${esc(dica)}</p></div>`;
         h += `<p class="peq suave">Ciclo ${L.ciclo}. As cartas mudam a cada Laço do Tempo.</p>`;

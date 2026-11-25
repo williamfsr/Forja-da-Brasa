@@ -1,4 +1,6 @@
 // Motor do jogo 2D em 32 bits: vila, Vale, masmorras procedurais e batalhas táticas por turnos sobre o próprio mapa.
+import { Dados } from './dados.js';
+import { rolar } from './srd.js';
 import { CLASSES, ITENS, MONSTROS } from './srd.js';
 import { CAPITULOS, NPCS } from './story.js';
 import * as St from './store.js';
@@ -23,6 +25,11 @@ import { apPadrao } from './cosmeticos.js';
 import { criarGrupo, tamanhoGrupo, comPerfil } from './encontros.js';
 import { texto } from './gfx.js';
 import { passoVida, ambiente, Vida, vidaAtual } from './vida.js';
+import * as Luz from './luz.js';
+import * as Clima from './clima.js';
+import { FESTA_LISTA, festaVerificar, festaAtiva, introPendente, introFesta, festaNpcs, conversarFesta, desenharFesta, confete } from './festa.js';
+import { safiraNaVila, posSafira, conversarSafira, instalar as instalarSafira } from './safira.js';
+import { parceiro } from './romance.js';
 
 const TS = Rn.TS;
 const DIRV = { cima: [0, -1], baixo: [0, 1], esq: [-1, 0], dir: [1, 0] };
@@ -33,10 +40,10 @@ const rnd = (n) => Math.floor(Math.random() * n);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 export const G = { modo: 'titulo', ui: null, ocupado: false, D: null, mapa: null };
-let visitaT = 0, canvas, ultimoT = 0, tempo = 0, stepCool = 6, mapa, npcs = [], D = null, cenaBat = 'vale';
+let insetN = 0, festaT = 0, visitaT = 0, canvas, ultimoT = 0, tempo = 0, stepCool = 6, mapa, npcs = [], D = null, cenaBat = 'vale';
 const NOME_PAINEL = { forja: 'Forja da Brasa', arena: 'Arena de Ferro', templo: 'Templo', biblioteca: 'Biblioteca', taverna: 'Taverna', alquimista: 'Alquimia', mercador: 'Empório', trilha: 'Pavilhão da Trilha' };
 const P = { x: 14, y: 26, dir: 'baixo', mov: null, passo: 0 };
-G.P = P;
+G.P = P; G.npcsAtuais = () => npcs; G.falar = (n) => falarComNpc(n);
 const fade = { a: 0, alvo: 0, res: null };
 const pilha = []; let pedidoA = false, pedidoB = false;
 const flut = []; // textos flutuantes de exploração
@@ -66,6 +73,8 @@ G.viajar = async (id) => {
   await comFade(async () => { trocarMapaSemFade(d.mapa, d.pos); Au.tocarMusica(G.modo === 'vale' ? 'mundo' : 'vila'); }); G.ui.hud(); return true;
 };
 G.NOME_PAINEL = NOME_PAINEL; G.dadiva = () => dadiva(G); G.teo = () => teo(G); G.sonho = () => sonho(G);
+G.retratoDe = (id) => { const pf = NPC_PERFIL[id]; return pf ? retrato(pf.ap, { nivel: 6, capaC: '#8a2a1a', capaC2: '#5a1a10', ...pf.vis }, 4) : null; };
+instalarSafira(G);
 G.retratoNhor = () => { const ap = Object.assign(apPadrao('paladino', 'humano'), { pele: '#d8d0e0', cabeloCor: '#d9d9de', cabelo: 3, olhosCor: '#9aa8b8', marca: 6, roupa1: '#2a2a38', roupa2: '#14141c', sobr: 3, boca: 2, arm1: '#2a2a38', arm2: '#8a8aa0', elmo: false, capa: 2 }); return retrato(ap, { cls: 'paladino', cat: 'pesada', ornam: 5, nivel: 20, capaC: '#3a3a4a', capaC2: '#14141c' }, 4); };
 G.visitados = () => ((S().mundo ||= { visitados: {} }).visitados);
 
@@ -95,6 +104,11 @@ function instalarEntrada() {
   const A = document.getElementById('btn-a'), B = document.getElementById('btn-b'), M = document.getElementById('btn-menu');
   if (A) bind(A, () => { if (!G.ui.modalAberto() || G.ui.dialogoAberto()) pedidoA = true; }, () => {});
   if (B) bind(B, () => { pedidoB = true; }, () => {});
+  // desktop: botão esquerdo do mouse = A (sobre o mapa), direito = B (em qualquer lugar fora de campos de texto)
+  const tela = document.getElementById('tela');
+  if (tela) tela.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' || e.button !== 0 || G.modo === 'batalha' || G.modo === 'titulo') return; Au.destravar(); if (!G.ui.modalAberto() || G.ui.dialogoAberto()) pedidoA = true; });
+  document.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' || e.button !== 2 || emCampo() || G.modo === 'titulo') return; if (e.target.closest && e.target.closest('#titulo')) return; Au.destravar(); pedidoB = true; });
+  document.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('input, textarea, select')) return; e.preventDefault(); });
   if (M) M.addEventListener('click', () => { Au.destravar(); if (G.modo !== 'batalha' && G.modo !== 'titulo' && !G.ui.modalAberto()) G.ui.painel('menu'); });
 }
 
@@ -108,16 +122,21 @@ function atualizar(dt) {
   if (fade.a !== fade.alvo) { const v = dt * 4.2; fade.a = fade.a < fade.alvo ? Math.min(fade.alvo, fade.a + v) : Math.max(fade.alvo, fade.a - v); if (fade.a === fade.alvo && fade.res) { const r = fade.res; fade.res = null; r(); } }
   for (let i = flut.length - 1; i >= 0; i--) { flut[i].t += dt * 0.9; if (flut[i].t > 1.15) flut.splice(i, 1); }
   Rn.PART.passo(dt);
+  { const foraC = G.modo !== 'masmorra' && !(G.modo === 'batalha' && cenaBat === 'masmorra') && !(mapa && mapa.interior); Clima.passo(dt, St.S, foraC); Luz.passo(dt, St.S); }
   if (St.S && G.modo !== 'masmorra' && !(G.modo === 'batalha' && cenaBat === 'masmorra') && G.modo !== 'titulo') { const [px, py] = posJogador(); passoVida(dt, St.S, px * TS + 16, py * TS + 16, G.ui && G.ui.toast); if (!Vida.onda || true) ambiente(dt, Rn.PART, Rn.cam, Rn.VW, vidaAtual()); }
   if (G.modo === 'batalha') { Ba.atualizar(dt); sincronizarVisaoBatalha(); consumirPedidos(); return; }
   if (G.modo === 'titulo') { atualizarNpcs(dt); consumirPedidos(); return; }
+  festaT += dt; if (festaT > 1.5 && St.S && G.modo !== 'titulo') { festaT = 0; const ev = festaVerificar(); const livreF = !G.ocupado && !P.mov && (G.modo === 'vila' || G.modo === 'vale') && !(mapa && mapa.interior) && !G.ui.modalAberto() && !fade.alvo;
+    if (ev === 'fim') { G.ui.toast('A festa acabou. A Névoa espreita de novo: não pare agora.', 5200); if (mapa && G.mapa === 'vila') npcs = npcsDoMapa('vila'); }
+    if (livreF && introPendente()) introFesta(G).then(() => { if (mapa && G.mapa === 'vila') npcs = npcsDoMapa('vila'); }); }
+  if (festaAtiva() && G.mapa === 'vila' && (G.modo === 'vila' || G.modo === 'batalha')) confete(dt, Rn.PART, Rn.cam, Rn.VW);
   visitaT += dt; if (visitaT > 4 && !G.ocupado && !P.mov && (G.modo === 'vila' || G.modo === 'vale') && !(mapa && mapa.interior) && !G.ui.modalAberto() && !fade.alvo && St.S) { visitaT = 0; if (visitaPendente()) visitaDoRei(G); }
   if (P.mov) { P.mov.t += dt / P.mov.dur; if (P.mov.t >= 1) { P.x = P.mov.x1; P.y = P.mov.y1; P.mov = null; P.passo++; chegou(); } }
   atualizarNpcs(dt); if (D) atualizarMonstrosAnim(dt);
   const livre = !G.ocupado && !G.ui.modalAberto() && fade.a < 0.2;
   if (livre && !P.mov && pilha.length) iniciarMov(pilha[pilha.length - 1]);
   if (pedidoA) { pedidoA = false; if (livre && !P.mov) interagir(); else if (G.ui.dialogoAberto()) G.ui.dialogoAvancar(); }
-  if (pedidoB) { pedidoB = false; if (G.ui.modalAberto()) G.ui.fechar(); else if (livre && !P.mov && (G.modo === 'masmorra')) G.ui.painel('menu'); }
+  if (pedidoB) { pedidoB = false; if (G.ui.modalAberto()) G.ui.fechar(); else if (livre && !P.mov && G.modo !== 'titulo') G.ui.painel('menu'); }
 }
 function consumirPedidos() {
   if (pedidoA) { pedidoA = false; if (G.ui.dialogoAberto()) G.ui.dialogoAvancar(); else Ba.teclaA(); }
@@ -132,10 +151,23 @@ function trocarMapaSemFade(id, pos) {
   if (id.includes('/')) obterMapa(id.split('/')[0]); // garante a fábrica do interior
   mapa = obterMapa(id); G.mapa = id; G.mp = mapa; const p = pos || mapa.spawn || { x: 1, y: 1 };
   P.x = p.x; P.y = p.y; P.mov = null; P.dir = 'baixo'; D = null; G.D = null; flut.length = 0; pilha.length = 0;
-  npcs = mapa.npcs.map((n) => ({ ...n, home: { x: n.x, y: n.y }, dir: 'baixo', mov: null, t: 1 + Math.random() * 3, passo: 0 }));
+  npcs = npcsDoMapa(id);
   G.modo = mapa.tipo === 'regiao' ? 'vale' : (G.modo === 'titulo' ? 'titulo' : 'vila');
   if (St.S) { G.visitados()[id.split('/')[0]] = true; if (mapa.tipo === 'regiao') garantirBausDoDia(); }
   Rn.PART.limpar && Rn.PART.limpar();
+}
+// população do mapa: a base, mais quem só aparece em certos dias (Safira às quintas), a festa na praça e o par que mora com o herói
+const FESTA_IDS = new Set(FESTA_LISTA);
+const criarNpc = (n) => ({ ...n, home: { x: n.x, y: n.y }, dir: 'baixo', mov: null, t: 1 + Math.random() * 3, passo: 0 });
+function npcsDoMapa(id) {
+  let base = mapa.npcs.slice(); const livre = (x, y) => x > 0 && y > 0 && x < mapa.w - 1 && y < mapa.h - 1 && !solidoEm(mapa, x, y) && !mapa.gat[y * mapa.w + x];
+  if (St.S && id === 'vila') {
+    if (festaAtiva()) { const ids = new Set(); const fest = festaNpcs(livre); fest.forEach((f) => ids.add(f.id)); base = base.filter((n) => !ids.has(n.id)).concat(fest); }
+    if (safiraNaVila()) base.push({ id: 'safira', x: posSafira.x, y: posSafira.y, fixo: true });
+  }
+  if (St.S && festaAtiva() && id.startsWith('vila/')) base = base.filter((n) => !FESTA_IDS.has(n.id));
+  const par = St.S && parceiro(); if (par && par.tipo === 'casado' && id === 'vila/casa') base.push({ id: par.id, x: 9, y: 3, fixo: true });
+  return base.map(criarNpc);
 }
 function garantirBausDoDia() { const s = S(); if (!s.diario.baus) s.diario.baus = bausDoDia(mapa, s.diario.data, s.criado, St.capituloDisponivel() || 20); }
 async function trocarMapa(para, pos) {
@@ -197,13 +229,14 @@ async function falarComNpc(n) {
   const dx = P.x - n.x, dy = P.y - n.y; n.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'dir' : 'esq') : (dy > 0 ? 'baixo' : 'cima'); n.mov = null;
   const ret = pf ? retrato(pf.ap, npcVis(pf), 4) : null; const nome = def.nome + (def.papel ? ` · ${def.papel}` : '');
   Au.sfx('select'); let abrir = false;
-  try { abrir = await conversar(G, n, def, pf, ret, nome, falaContextual(n.id)); } finally { G.ocupado = false; }
+  const normal = () => conversar(G, n, def, pf, ret, nome, falaContextual(n.id));
+  try { abrir = n.id === 'safira' ? await conversarSafira(G, n, def, pf, ret, nome) : (n.festa && festaAtiva()) ? await conversarFesta(G, n, def, pf, ret, nome, normal) : await normal(); } finally { G.ocupado = false; }
   if (abrir) G.ui.painel(n.painel);
 }
 function falaContextual(id) {
   const s = S(), Dd = St.dia(), h = s.historia;
   switch (id) {
-    case 'lucia': return `Maré da Inércia: ${h.inercia}/10 — ${h.inercia >= 7 ? 'perigosa!' : h.inercia >= 4 ? 'fique atento.' : 'sob controle.'}`;
+    case 'lucia': { const mi = St.inerciaEf(s); return `Maré da Inércia: ${mi}/10 — ${mi >= 7 ? 'perigosa!' : mi >= 4 ? 'fique atento.' : 'sob controle.'}`; }
     case 'ferrao': return Dd.series ? `Hoje: ${Dd.series} série(s) e ${Dd.prs} PR(s). ${Dd.series >= 6 ? 'Isso é treino!' : 'Dá para mais.'}` : 'Hoje ainda não vi você suar aqui.';
     case 'eruvim': return Dd.estudo ? `${Dd.estudo} min de estudo hoje.` : 'Nenhuma página virada hoje...';
     case 'tavi': { const f = St.faixaDeHoje(); return `Sua mesa hoje: ${f.nome}.`; }
@@ -237,6 +270,8 @@ function posicoesExterior(grade, hx, hy, n) {
   for (let i = 1; i < n; i++) { let achou = null; for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [0, 2], [-2, 0], [0, -2]]) { const x = base.x + dx, y = base.y + dy; if (livre(x, y) && !usados.has(`${x},${y}`)) { achou = { x, y }; break; } } const p = achou || { x: base.x + i, y: base.y }; usados.add(`${p.x},${p.y}`); out.push(p); }
   return out;
 }
+// nos dois primeiros capítulos a Maré alta não endurece os monstros além de 6 (o Vale começa devastado, mas o herói também)
+const inerciaMon = (s) => Math.min(St.inerciaEf(s), s.historia.cap <= 2 ? 6 : 10);
 const idxId = (id) => parseInt(String(id).slice(1), 10);
 // inicia uma batalha tática sobre o mapa atual
 async function lutar({ inimigos, pos = null, origem, tema, surpresa = false, ents = null }) {
@@ -293,7 +328,7 @@ function sincronizarVisaoBatalha() { if (!D || cenaBat !== 'masmorra') return; c
 async function encontroDoVale(i) {
   const s = S(); const reg = mapa.reg[i]; const ativo = St.capituloDisponivel() || 20; const capN = Math.max(1, Math.min(reg, ativo));
   const cap = CAPITULOS[capN - 1]; const pool = R.poolDoCapitulo(cap); const n = tamanhoGrupo(Math.random, s.heroi.nivel, 3);
-  const inimigos = criarGrupo({ pool, n, escala: cap.comuns, aj: R.AJUSTE_CLASSE[s.heroi.cls] || 1, inercia: s.historia.inercia, ciclo: s.historia.ciclo });
+  const inimigos = criarGrupo({ pool, n, escala: cap.comuns, aj: R.AJUSTE_CLASSE[s.heroi.cls] || 1, inercia: inerciaMon(s), ciclo: s.historia.ciclo });
   pilha.length = 0; G.ocupado = true; Au.sfx('tocha'); await flashTela(); G.ocupado = false;
   await lutar({ inimigos, origem: 'vale', tema: cap.tema, surpresa: Math.random() < 0.1 });
 }
@@ -321,7 +356,7 @@ function carregarAndar(salvo) {
   const nivel = cap ? cap.n : s.heroi.nivel; const explorador = !cap && s.campanha && s.campanha.modo === 'explorador'; let chefe = final ? (cap ? cap.boss : chefeCatacumbas(r.andar, nivel, explorador)) : null;
   if (chefe && cap && cap.n === 20) { const nr = nReliquias(s); if (nr) chefe = { ...chefe, esc: chefe.esc * (1 - 0.08 * nr), dm: chefe.dm * (1 - 0.04 * nr) }; }
   const seed = R.hashStr(`${r.tipo}:${r.cap}:${r.andar}:${r.seedBase}:${s.historia.ciclo}`);
-  const d = gerarMasmorra({ seed, andar: r.andar, final, tema, pool: cap ? R.poolDoCapitulo(cap) : [], nivel, chefe, inercia: s.historia.inercia, ciclo: s.historia.ciclo, ajuste: R.AJUSTE_CLASSE[s.heroi.cls] || 1, escala: cap ? cap.comuns : null, explorador });
+  const d = gerarMasmorra({ seed, andar: r.andar, final, tema, pool: cap ? R.poolDoCapitulo(cap) : [], nivel, chefe, inercia: inerciaMon(s), ciclo: s.historia.ciclo, ajuste: R.AJUSTE_CLASSE[s.heroi.cls] || 1, escala: cap ? cap.comuns : null, explorador });
   d.ents.forEach((e, i) => { e.i = i; e.px = e.x; e.py = e.y; if (e.tipo === 'chefe') { e.vivo = true; e.acordado = false; } });
   const ra = Rn.apDe(s); const visaoRaca = (ra && ra.raca && ['elfo', 'anao', 'gnomo', 'meioelfo', 'meioorc', 'tiefling', 'draconato'].includes(ra.raca)) ? 1 : 0;
   D = { d, cap, final, tema, seed, vis: new Set(), raio: 6 + visaoRaca, bonusVisao: visaoRaca, ultimoPasso: 0 }; G.D = D;
@@ -390,13 +425,13 @@ function moverMonstros() {
 function atualizarMonstrosAnim(dt) { for (const e of D.d.ents) { if (e.px === undefined) continue; const k = Math.min(1, dt * 12); e.px += (e.x - e.px) * k; e.py += (e.y - e.py) * k; } }
 function interagirMasmorra() {
   const [dx, dy] = DIRV[P.dir], tx = P.x + dx, ty = P.y + dy; const e = D.d.ents.find((q) => q.x === tx && q.y === ty && q.tipo === 'armadilha' && q.ativa && !q.oculta);
-  if (e) { const M = R.derivar(S()).M; const r = Math.floor(Math.random() * 20) + 1 + (M.DES || 0); if (r >= 12) { e.ativa = false; Au.sfx('select'); const o = 3 + D.d.andar * 2; St.ganhoDaMasmorra(o); Rn.flutuar(flut, tx, ty - 0.4, `DESARMADA +${o}`, '#6fcf7f'); } else { Rn.flutuar(flut, tx, ty - 0.4, 'FALHOU!', '#ff5c6c'); dispararArmadilha(e); } return; }
+  if (e) { const M = R.derivar(S()).M; const nat = Math.floor(Math.random() * 20) + 1; const r = nat + (M.DES || 0); Dados.teste20(nat, { mod: M.DES || 0, dc: 12, rot: 'Destreza (desarmar)', ok: r >= 12 }); if (r >= 12) { e.ativa = false; Au.sfx('select'); const o = 3 + D.d.andar * 2; St.ganhoDaMasmorra(o); Rn.flutuar(flut, tx, ty - 0.4, `DESARMADA +${o}`, '#6fcf7f'); } else { Rn.flutuar(flut, tx, ty - 0.4, 'FALHOU!', '#ff5c6c'); dispararArmadilha(e); } return; }
   const q = D.d.ents.find((z) => z.x === tx && z.y === ty && z.vivo !== false); if (q) movMasmorra(P.dir, tx, ty);
 }
 function dispararArmadilha(e) {
   e.ativa = false; e.oculta = false; Au.sfx('armadilha'); Au.vibrar(60); const s = S(), der = R.derivar(s); const andar = D.d.andar;
-  const dados = 1 + Math.floor(s.heroi.nivel / 3) + Math.floor(andar / 4); let dano = 0; for (let k = 0; k < dados; k++) dano += 1 + rnd(6);
-  const dc = 11 + Math.floor(andar / 3), r = 1 + rnd(20) + (der.M.DES || 0); if (r >= dc) dano = Math.floor(dano / 2);
+  const dados = 1 + Math.floor(s.heroi.nivel / 3) + Math.floor(andar / 4); let dano = rolar(`${dados}d6`).total;
+  const dc = 11 + Math.floor(andar / 3), nat = 1 + rnd(20), r = nat + (der.M.DES || 0); Dados.teste20(nat, { mod: der.M.DES || 0, dc, rot: 'Destreza (esquivar)', ok: r >= dc }); if (r >= dc) dano = Math.floor(dano / 2);
   s.heroi.hp = Math.max(1, s.heroi.hp - dano); Rn.flutuar(flut, P.x, P.y - 0.6, `-${dano}`, '#ff5c6c'); G.ui.toast(r >= dc ? `Você se esquiva em parte da armadilha! (−${dano} PV)` : `Armadilha! (−${dano} PV)`); St.salvar(); G.ui.hud();
 }
 function abrirBauMasmorra(e) {
@@ -470,6 +505,7 @@ function desenhar() {
 function posJogador() { return P.mov ? [P.x + (P.mov.x1 - P.x) * P.mov.t, P.y + (P.mov.y1 - P.y) * P.mov.t] : [P.x, P.y]; }
 function camera(mw, mh) {
   if (G.modo === 'titulo') { Rn.cam.x = Math.round(Math.max(0, Math.min(mw * TS - Rn.VW.w, (mw / 2) * TS - Rn.VW.w / 2 + Math.sin(tempo * 0.2) * 30))); Rn.cam.y = Math.round(Math.max(0, Math.min(mh * TS - Rn.VW.h, 17 * TS - Rn.VW.h / 2))); return; }
+  if ((insetN = (insetN + 1) % 8) === 0) Rn.medirInsets();
   if (G.modo === 'batalha') { if (Ba.camLivre()) return; const f = Ba.camFoco(); if (f) Rn.camPara(f.x, f.y, mw, mh, 0.16); return; }
   const [x, y] = posJogador(); Rn.camPara(x, y, mw, mh);
 }
@@ -487,7 +523,7 @@ function desenharMapa(ctx) {
   for (const b of baus()) itens.push({ y: (b.y + 1) * TS, d: (c) => { const img = spriteObjeto(b.aberto ? 'bauA' : 'bauF'); c.drawImage(img, Math.round(b.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round(b.y * TS + 16 - img.height / 2 - Rn.cam.y)); if (!b.aberto) texto(c, '!', Math.round(b.x * TS + 16 - Rn.cam.x), Math.round(b.y * TS - 6 - Rn.cam.y + Math.sin(tempo * 5) * 1.5), { cor: '#ffd23f', tam: 10 }); } });
   if (!titulo && !bat) { const j = itemJogador(); if (j) itens.push(j); }
   if (bat) itens.push(...Ba.itens());
-  const opc = { tempo, itens, antes: bat ? Ba.desenharAntes : null, depois: (c) => { Rn.desenharFlutuantes(c, flut); Rn.PART.desenhar(c, Rn.cam.x, Rn.cam.y); if (bat) Ba.desenharDepois(c); }, vida: St.S ? { v: vidaAtual(), onda: Vida.onda } : null, batalha: bat };
+  const opc = { tempo, itens, heroiTile: (!titulo && !bat) ? (() => { const [hx, hy] = posJogador(); return { x: hx, y: hy }; })() : null, antes: bat ? Ba.desenharAntes : null, depois: (c) => { if (St.S && G.mapa === 'vila' && festaAtiva()) desenharFesta(c, Rn.cam, TS, tempo); Rn.desenharFlutuantes(c, flut); Rn.PART.desenhar(c, Rn.cam.x, Rn.cam.y); if (bat) Ba.desenharDepois(c); }, vida: St.S ? { v: vidaAtual(), onda: Vida.onda } : null, batalha: bat };
   if (St.S && m.extra && m.extra.length) { const ativo = St.capituloDisponivel(); opc.caps = m.extra.map((e) => ({ n: e.n, x: e.x, y: e.y, spr: e.spr, cata: e.cata, ativo: !e.cata && e.n === ativo, limpo: !e.cata && St.S.historia.limpos.includes(e.n) })); }
   if (m.reg && St.S) { const ativo = St.capituloDisponivel(); opc.vale = { reg: m.reg, lim: Math.max(ativo || 20, 1) + 1.2 }; }
   Rn.desenharExterno(ctx, m, opc);
@@ -507,10 +543,11 @@ function desenharMasmorra(ctx) {
   if (!bat) { const j = itemJogador(); if (j) itens.push({ ...j, y: (pyf + 1) * TS + 0.3 }); } else itens.push(...Ba.itens());
   Rn.desenharMas(ctx, d, { tempo, itens, vis: D.vis, raio: D.raio, jogador: { x: pxf, y: pyf }, T, antes: bat ? Ba.desenharAntes : null, depois: (c) => { Rn.desenharFlutuantes(c, flut); Rn.PART.desenhar(c, Rn.cam.x, Rn.cam.y); if (bat) Ba.desenharDepois(c); }, topo: (c) => { if (!bat) minimapa(c, d, s); } });
 }
-function hudMasmorra(c, s) { const r = s.run; if (!r) return; texto(c, r.tipo === 'historia' ? `${D.cap.local}  ${r.andar}/${D.cap.andares}` : `CATACUMBAS  ANDAR ${r.andar}`, 6, 8, { cor: '#fff', tam: 8, alinha: 'left' }); }
+const topoHud = () => Math.round(Rn.INSET.t * Rn.VW.h / (Rn.VW.ch || 1)); // o HUD é translúcido e sobreposto: a masmorra desenha abaixo dele
+function hudMasmorra(c, s) { const r = s.run; if (!r) return; texto(c, r.tipo === 'historia' ? `${D.cap.local}  ${r.andar}/${D.cap.andares}` : `CATACUMBAS  ANDAR ${r.andar}`, 6, 8 + topoHud(), { cor: '#fff', tam: 8, alinha: 'left' }); }
 function minimapa(c, d, s) {
-  const k = 2, mw = d.w * k, mh = d.h * k, mx = Rn.VW.w - mw - 4, my = 4; c.fillStyle = 'rgba(6,4,14,0.65)'; c.fillRect(mx - 1, my - 1, mw + 2, mh + 2);
+  const k = 2, mw = d.w * k, mh = d.h * k, mx = Rn.VW.w - mw - 4, my = 4 + topoHud(); c.fillStyle = 'rgba(6,4,14,0.65)'; c.fillRect(mx - 1, my - 1, mw + 2, mh + 2);
   for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) { const i = y * d.w + x; if (!d.explorado[i]) continue; const t = d.tiles[i]; c.fillStyle = t === T.PAREDE ? '#3a3250' : t === T.DESCE ? '#6af0ff' : t === T.SOBE ? '#6fcf7f' : '#8a84a8'; c.fillRect(mx + x * k, my + y * k, k, k); }
   for (const e of d.ents) { if (e.vivo === false) continue; const i = e.y * d.w + e.x; if (e.tipo === 'chefe' && d.explorado[i]) { c.fillStyle = '#ff5c6c'; c.fillRect(mx + e.x * k - 1, my + e.y * k - 1, 4, 4); } else if (e.tipo === 'bau' && !e.aberto && d.explorado[i]) { c.fillStyle = '#ffd23f'; c.fillRect(mx + e.x * k, my + e.y * k, k, k); } }
-  c.fillStyle = Math.floor(tempo * 3) % 2 ? '#ffd23f' : '#fff'; c.fillRect(mx + P.x * k - 1, my + P.y * k - 1, 4, 4); hudMasmorra(c, s); texto(c, `TOCHAS ${s.heroi.tochas}`, 6, 18, { cor: '#ffb52e', tam: 8, alinha: 'left' });
+  c.fillStyle = Math.floor(tempo * 3) % 2 ? '#ffd23f' : '#fff'; c.fillRect(mx + P.x * k - 1, my + P.y * k - 1, 4, 4); hudMasmorra(c, s); texto(c, `TOCHAS ${s.heroi.tochas}`, 6, 18 + topoHud(), { cor: '#ffb52e', tam: 8, alinha: 'left' });
 }

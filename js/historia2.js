@@ -1,7 +1,7 @@
 // Dados narrativos: tudo adaptado ao Rei da Inércia (Nhor-Kaal) como "Maldição de Strahd" é a Strahd — o Vale inteiro gira em torno dele.
 // Nada aqui copia texto do módulo: são paralelos originais (leitora de cartas, festival que nega o medo, visitas do vilão, templo de dádivas, caçadores de monstros...).
 export const ATIT = { // como cada NPC trata forasteiros marcados: 'acolhe' | 'desconfia'
-  brasa: 'acolhe', ferrao: 'acolhe', aurora: 'acolhe', eruvim: 'acolhe', tavi: 'acolhe', lucia: 'desconfia', quinzinho: 'acolhe', alquimista: 'acolhe', ilara: 'acolhe', safira: 'acolhe',
+  brasa: 'acolhe', ferrao: 'acolhe', aurora: 'acolhe', eruvim: 'acolhe', tavi: 'acolhe', lucia: 'desconfia', quinzinho: 'acolhe', alquimista: 'acolhe', ilara: 'acolhe', ordalia: 'acolhe',
   gaudencio: 'desconfia', marcovia: 'desconfia', hornfel: 'desconfia', rictus: 'desconfia', caliope: 'acolhe', vovo: 'acolhe', estalajadeira: 'acolhe', padre: 'desconfia', brindival: 'acolhe',
   barqueiro: 'acolhe', druida: 'desconfia', mordomo: 'desconfia', guarda: 'desconfia', menino: 'acolhe', sentinela: 'desconfia',
 };
@@ -34,7 +34,7 @@ export const QFALAS = {
   p1: { ativa: ['A forja esfriou porque quem a alimentava parou de vir. Registre uma série na Arena e desça ao Porão: lá ficava a Casa do Repouso, onde Nhor era chamado de Constante.', 'Se achar um caderno queimado com a letra N, traga: é a primeira página que sobrou do Rei.'], feita: ['Você desceu e voltou. É mais do que fiz em anos. A Brasa respondeu ao seu passo.'] },
   p2: { ativa: ['Ninguém sai do Vale: quem tenta, volta sentado, sem saber como. A Névoa Parada obedece a alguém.', 'Faça aeróbico e olhe a Névoa enquanto corre. Ela recua quando a gente se move.'], feita: ['A Névoa recuou na sua frente. É a primeira prova de que ela tem dono... e que o dono teme movimento.'] },
   p3: { ativa: ['Ilara corre antes do amanhecer; a Inércia a persegue há gerações. Acompanhe-a até o Mosteiro. O Rei a observa de longe.', 'Se ouvir passos parados atrás de vocês, não olhe: corra.'], feita: ['Ilara chegou inteira. Ela diz que, ao seu lado, o medo de olhar para trás sumiu por alguns minutos.'] },
-  p4: { ativa: ['Os Andarilhos acampam na estrada. Dona Safira lê um baralho que mostra onde as relíquias do Vale dormem, mas só a quem já provou ser constante.', 'Volte a ela depois de me mostrar que consegue manter a rotina.'], feita: ['As cartas caíram. Três lugares, um aliado, e um rosto que você ainda não conhece: o do Rei.'] },
+  p4: { ativa: ['Os Andarilhos acampam na estrada. Dona Ordália lê um baralho que mostra onde as relíquias do Vale dormem, mas só a quem já provou ser constante.', 'Volte a ela depois de me mostrar que consegue manter a rotina.'], feita: ['As cartas caíram. Três lugares, um aliado, e um rosto que você ainda não conhece: o do Rei.'] },
   p5: { ativa: ['A Lâmina do Meio-Dia só se deixa empunhar por quem aguenta o peso do Sol. Treine pesado e vá buscá-la.'], feita: ['A lâmina é sua. Ela brilha mais quando você acorda cedo.'] },
   p6: { ativa: ['O Símbolo do Alvorecer esquenta toda manhã em que o portador se levanta. Ele quer alguém que durma bem e acorde cedo.'], feita: ['O disco está morno na sua mão. Se esfriar, é o Vale avisando que você parou.'] },
   p7: { ativa: ['O Rei guarda um diário com os seus medos. Estude, estude muito: ler aquilo é a melhor arma contra ele.'], feita: ['Você leu o que ele escreveu. Agora ele não é só um monstro: é alguém que perdeu um irmão.'] },
@@ -121,7 +121,7 @@ export const TOPICOS = {
     { id: 'corre', rot: 'Por que você corre antes do sol?', npc: ['Porque depois dele a Inércia me alcança. Ela é lenta, mas constante. Eu preciso ser mais constante que ela.'] },
     { id: 'quem', rot: 'Quem você pensa que é?', npc: ['Não sei. Sonho com um rio, com um irmão e com um penhasco. Acordo suada e correndo, sem saber para onde. É como se eu estivesse atrasada para algo que ainda vai acontecer.'], req: (c) => c.cap >= 3 },
     { id: 'rei', rot: 'O Rei te quer, não é?', npc: ['Ele me olha como quem olha uma pintura que perdeu. Mas eu não sou o quadro de ninguém.'], req: (c) => c.cap >= 6 }],
-  safira: [
+  ordalia: [
     { id: 'cartas', rot: 'O baralho mostra o Rei?', npc: ['Sempre. Em todas as leituras há uma carta sentada. Nunca é a mesma, mas é sempre a que não se move.', 'O baralho não mostra o futuro. Mostra o que você já sabe e finge ignorar.'] },
     { id: 'andarilhos', rot: 'Os Andarilhos fogem do Rei?', npc: ['Fingimos que ele não nos vê passar. É o único jeito de continuar andando.'] }],
   gaudencio: [

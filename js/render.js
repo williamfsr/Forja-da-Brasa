@@ -8,6 +8,8 @@ import { ITENS } from './srd.js';
 import { CAPAS } from './conteudo.js';
 import { visualDe } from './pessoa.js';
 import { normalizarAp } from './cosmeticos.js';
+import * as Luz from './luz.js';
+import * as Clima from './clima.js';
 import { tokenHeroi, tokenPessoa, tokenMonstro, tamDe, tamanhoPx, desenharToken, angDe, escalaPessoa, armaDeItem } from './tokens.js';
 
 export { TS };
@@ -21,7 +23,7 @@ export const tokenHeroiDe = (s) => { const ap = apDe(s); const t = tokenHeroi(s,
 export function tokenPessoaDe(ap, vis, arma = null) { const t = tokenPessoa(ap, vis, arma); return t ? { t, px: 32 * escalaPessoa(ap) } : null; }
 export function tokenMonstroDe(m) { const t = tokenMonstro(m); return t ? { t, px: tamanhoPx(tamDe(m)) } : null; }
 export { armaDeItem };
-export function tokenEm(ctx, tk, tx, ty, dir, obj, op = {}) { desenharToken(ctx, tk.t, cam, tx, ty, angDe(obj, dir), tk.px, op); }
+export function tokenEm(ctx, tk, tx, ty, dir, obj, op = {}) { const ang = angDe(obj, dir); Luz.sombraToken(ctx, tk, cam, tx, ty, ang, op); desenharToken(ctx, tk.t, cam, tx, ty, ang, tk.px, op); }
 export const PART = new Particulas();
 
 // ---------- vista ----------
@@ -33,7 +35,7 @@ export function iniciarVista(canvas) {
 export function ajustarVista() {
   const c = VW.canvas, box = c.parentElement; const cw = box.clientWidth, ch = box.clientHeight; if (!cw || !ch) return;
   const dpr = Math.min(3, window.devicePixelRatio || 1); const Wd = Math.max(64, Math.round(cw * dpr)), Hd = Math.max(64, Math.round(ch * dpr));
-  const bat = document.body.classList.contains('em-batalha'); const alvoTiles = (cw < 520 ? 9.5 : cw < 900 ? 12 : 15) + (bat ? (cw < 520 ? 3 : 3) : 0); const Z = Math.max(1, Math.round(Wd / (alvoTiles * TS)));
+  const bat = document.body.classList.contains('em-batalha'); const alvoTiles = (cw < 520 ? 9.5 : cw < 900 ? 12 : 15) + (bat ? (cw < 520 ? 1.5 : 3) : 0); const Zw = Math.max(1, Math.round(Wd / (alvoTiles * TS))), Zh = Math.max(1, Math.round(Hd / (7.5 * TS))); const Z = Math.min(Zw, Zh);
   if (c.width !== Wd || c.height !== Hd) { c.width = Wd; c.height = Hd; }
   VW.cw = cw; VW.ch = ch; VW.Z = Z; VW.w = Math.ceil(Wd / Z); VW.h = Math.ceil(Hd / Z); VW.sujo = false; VW.ctx.imageSmoothingEnabled = false;
 }
@@ -43,9 +45,23 @@ export function inicioFrame() {
 // coordenada de tela (clientX/Y) → tile do mundo
 export function telaParaTile(cx, cy) { const r = VW.canvas.getBoundingClientRect(); const ax = (cx - r.left) / r.width * VW.w + cam.x, ay = (cy - r.top) / r.height * VW.h + cam.y; return { x: Math.floor(ax / TS), y: Math.floor(ay / TS), ax, ay }; }
 export function tileParaTela(tx, ty) { const r = VW.canvas.getBoundingClientRect(); return { x: r.left + ((tx + 0.5) * TS - cam.x) / VW.w * r.width, y: r.top + ((ty + 0.5) * TS - cam.y) / VW.h * r.height }; }
+// margens ocupadas por painéis sobrepostos (px CSS): o herói/alvos ficam centrados na parte livre da tela
+export const INSET = { t: 0, b: 0, l: 0, r: 0 };
+export function medirInsets() {
+  const vw = window.innerWidth, vh = window.innerHeight; const R = (id) => { const e = document.getElementById(id); if (!e || e.classList.contains('oculto')) return null; const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
+  const bat = document.body.classList.contains('em-batalha'); let t = 0, b = 0, l = 0, r = 0;
+  const hud = R('hud'); if (hud) t = Math.max(t, hud.bottom * 0.85);
+  if (bat) { const o = R('bt-ordem'); if (o) t = Math.max(t, o.bottom + 4); const m = R('bt-menu'), h = R('bt-hero');
+    if (m && m.height > 20) { if (m.width < vw * 0.7) r = Math.max(r, vw - m.left); else b = Math.max(b, vh - m.top); }
+    if (h) { if (h.width < vw * 0.7) b = Math.max(b, (vh - h.top) * 0.5); else b = Math.max(b, vh - h.top); } }
+  const novo = { t, b, l, r }; if (novo.t !== INSET.t || novo.b !== INSET.b || novo.r !== INSET.r || novo.l !== INSET.l) { Object.assign(INSET, novo); }
+}
 export function camPara(fx, fy, mw, mh, suave = 0) { // fx, fy em tiles (float) → centro da câmera
-  const W = VW.w, H = VW.h; let cx = fx * TS + TS / 2 - W / 2, cy = fy * TS + TS / 2 - H / 2;
-  cx = mw * TS <= W ? (mw * TS - W) / 2 : Math.max(0, Math.min(mw * TS - W, cx)); cy = mh * TS <= H ? (mh * TS - H) / 2 : Math.max(0, Math.min(mh * TS - H, cy));
+  const W = VW.w, H = VW.h; const cw = VW.cw || 1, ch = VW.ch || 1; const ux = ((INSET.l + (cw - INSET.l - INSET.r) / 2) / cw) * W, uy = ((INSET.t + (ch - INSET.t - INSET.b) / 2) / ch) * H;
+  let cx = fx * TS + TS / 2 - ux, cy = fy * TS + TS / 2 - uy;
+  // a câmera pode passar da borda do mapa só o quanto os painéis sobrepostos cobrem
+  const kx = W / cw, ky = H / ch, il = INSET.l * kx, ir = INSET.r * kx, it = INSET.t * ky, ib = INSET.b * ky, Wf = W - il - ir, Hf = H - it - ib;
+  cx = mw * TS <= Wf ? -il - (Wf - mw * TS) / 2 : Math.max(-il, Math.min(mw * TS - W + ir, cx)); cy = mh * TS <= Hf ? -it - (Hf - mh * TS) / 2 : Math.max(-it, Math.min(mh * TS - H + ib, cy));
   if (suave > 0) { cam.x += (cx - cam.x) * suave; cam.y += (cy - cam.y) * suave; } else { cam.x = cx; cam.y = cy; }
   cam.x = Math.round(cam.x); cam.y = Math.round(cam.y);
 }
@@ -63,7 +79,7 @@ export function monstroEm(ctx, spr, tx, ty, { alfa = 1, flash: fl = null, dy = 0
   const w = spr.width, h = spr.height; const px = Math.round(tx * TS + 16 - w / 2 - cam.x + dx), py = Math.round(ty * TS + 33 - h - cam.y + dy); ctx.globalAlpha = alfa; const img = fl || spr;
   if (espelha) { ctx.save(); ctx.translate(px + w, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); } else ctx.drawImage(img, px, py); ctx.globalAlpha = 1;
 }
-export const sombraTile = (ctx, tx, ty, rx = 10, ry = 4, a = 0.3) => sombraEntidade(ctx, Math.round(tx * TS + 16 - cam.x), Math.round(ty * TS + 30 - cam.y), rx, ry, a);
+export const sombraTile = (ctx, tx, ty, rx = 10, ry = 4, a = 0.3) => { const cx = Math.round(tx * TS + 16 - cam.x), cy = Math.round(ty * TS + 30 - cam.y); if (!Luz.sombraEnt(ctx, cx, cy, rx, ry, a)) sombraEntidade(ctx, cx, cy, rx, ry, a); };
 export const spriteMonstroDe = (m) => spriteMonstro(m.spr, m.pal || {}, m.id || m.mon || 'x', m.tags || [], m.ap || null);
 export const alturaSprite = (spr) => (TAMANHO_SPR[spr] ? TAMANHO_SPR[spr][1] : 40);
 export function barraHp(ctx, tx, ty, frac, { largura = 22, y = -2, cor = null, alt = 3 } = {}) {
@@ -116,15 +132,15 @@ function gradearMundo(ctx, vd, forca) {
   ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.clip(); gradeUnica(ctx, o.novo, forca); ctx.restore();
   const melhora = o.novo > o.velho; ctx.save(); ctx.globalAlpha = Math.max(0, 0.8 - o.t * 0.7); ctx.lineWidth = 3; ctx.strokeStyle = melhora ? '#ffe27a' : '#8a7ac8'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.stroke(); ctx.lineWidth = 1; ctx.strokeStyle = melhora ? '#b8ff8a' : '#c8c0ff'; ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.1, R - 4), 0, 6.2832); ctx.stroke(); ctx.restore();
 }
-let tintCache = { t: 0, v: null };
-function tintHora() { const n = Date.now(); if (n - tintCache.t < 20000 && tintCache.v !== undefined) return tintCache.v; const d = new Date(), h = d.getHours() + d.getMinutes() / 60; let v = null; if (h >= 20.5 || h < 5) v = 'rgba(14,20,86,0.36)'; else if (h >= 18) v = 'rgba(255,120,40,0.15)'; else if (h < 7) v = 'rgba(255,170,90,0.10)'; tintCache = { t: n, v }; return v; }
 // opc: { tempo, itens:[{y,d}], antes(ctx), depois(ctx), vila:bool, vale:{reg,lim}, ativoCap, caps:[{n,x,y,limpo}] }
 export function desenharExterno(ctx, m, opc) {
-  const A = prepararExterno(m); const tempo = opc.tempo || 0; blit(ctx, A.canvas);
+  const A = prepararExterno(m); const tempo = opc.tempo || 0; Luz.preparar(!m.interior); blit(ctx, A.canvas);
   const x0 = Math.max(0, Math.floor(cam.x / TS) - 1), y0 = Math.max(0, Math.floor(cam.y / TS) - 1), x1 = Math.min(m.w - 1, Math.ceil((cam.x + VW.w) / TS) + 1), y1 = Math.min(m.h - 1, Math.ceil((cam.y + VW.h) / TS) + 1);
   // água e lava vivas
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const id = m.g[y * m.w + x]; if (id === 'agua') { const px = x * TS - cam.x, py = y * TS - cam.y; for (let k = 0; k < 2; k++) { const ph = (tempo * 0.7 + hash2(x, y, k + 9) * 6) % 3; if (ph < 1) { const sx = px + 4 + hash2(x, y, k + 20) * 24, sy = py + 4 + hash2(x, y, k + 30) * 24; ctx.globalAlpha = Math.sin(ph * 3.14) * 0.7; ctx.fillStyle = '#e8f6ff'; ctx.fillRect(Math.round(sx), Math.round(sy), 3, 1); ctx.globalAlpha = 1; } } }
     else if (id === 'lava') { const px = x * TS - cam.x, py = y * TS - cam.y; const a = 0.1 + 0.08 * Math.sin(tempo * 2 + hash2(x, y, 4) * 6); ctx.fillStyle = `rgba(255,170,40,${a})`; ctx.fillRect(px, py, TS, TS); } }
+  if (!m.interior) { const fS = Math.floor(tempo * 2.2) % 2; Luz.desenharSombras(ctx, VW, cam, m, A, { x0, y0, x1, y1, f: fS, imgDe: (o) => spriteObjeto(o.id, o.v, fS, (o.lim !== undefined && opc.vida && o.lim < fracMorta(opc.vida.v)) ? o.vizM : o.viz) }, opc); }
+  else Luz.sombrasInterior(ctx, VW, cam, m, { x0, y0, x1, y1 });
   if (opc.antes) opc.antes(ctx);
   // objetos altos + entidades por profundidade
   const lista = []; const f = Math.floor(tempo * 2.2) % 2;
@@ -140,7 +156,8 @@ export function desenharExterno(ctx, m, opc) {
   for (const t of m.rotulos || []) { const cxp = Math.round((t.x + 0.5) * TS - cam.x), cyp = Math.round(t.y * TS - cam.y - 3); if (cxp > -90 && cxp < VW.w + 90 && cyp > -12 && cyp < VW.h + 12) texto(ctx, t.t, cxp, cyp, { cor: t.int ? '#ffe9a8' : t.reg ? '#e8e0ff' : '#fff', tam: t.reg ? 7 : 8 }); }
   // névoa do Vale: regiões além do capítulo ativo
   if (opc.vale) { const { reg, lim } = opc.vale; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const r = reg[y * m.w + x]; if (r > lim) { ctx.fillStyle = `rgba(10,8,22,${Math.min(0.9, 0.5 + (r - lim) * 0.06)})`; ctx.fillRect(x * TS - cam.x, y * TS - cam.y, TS, TS); } } }
-  const tint = m.interior ? m.tint : tintHora(); if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, VW.w, VW.h); }
+  if (m.interior) { if (m.tint) { ctx.fillStyle = m.tint; ctx.fillRect(0, 0, VW.w, VW.h); } }
+  else { Luz.aplicar(ctx, VW, cam, m, A, opc, { x0, y0, x1, y1 }); const fc = opc.heroiTile ? { x: opc.heroiTile.x * TS + 16 - cam.x, y: opc.heroiTile.y * TS + 16 - cam.y } : null; Clima.desenhar(ctx, VW, cam, { foco: fc, tenebra: Luz.E.tenebra }); }
   if (opc.topo) opc.topo(ctx);
 }
 
@@ -148,18 +165,19 @@ export function desenharExterno(ctx, m, opc) {
 export function prepararMasmorra(d, tema, T, semente) { if (d.arte) return d.arte; d.arte = assarMasmorra(d, tema, T, semente); return d.arte; }
 // opc: { tempo, itens, antes, depois, vis:Set, raio, jogador:{x,y} (tiles, float), luzesExtra:[{x,y,r}], T }
 export function desenharMas(ctx, d, opc) {
-  const A = d.arte; const T = opc.T; blit(ctx, A.canvas); const tempo = opc.tempo || 0;
+  const A = d.arte; const T = opc.T; Luz.preparar(false); blit(ctx, A.canvas); const tempo = opc.tempo || 0;
   const x0 = Math.max(0, Math.floor(cam.x / TS)), y0 = Math.max(0, Math.floor(cam.y / TS)), x1 = Math.min(d.w - 1, Math.ceil((cam.x + VW.w) / TS)), y1 = Math.min(d.h - 1, Math.ceil((cam.y + VW.h) / TS));
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = y * d.w + x; const px = x * TS - cam.x, py = y * TS - cam.y;
     if (!d.explorado[i]) { ctx.fillStyle = '#05030a'; ctx.fillRect(px, py, TS, TS); continue; }
     if (!opc.vis.has(i)) { ctx.fillStyle = 'rgba(6,4,14,0.62)'; ctx.fillRect(px, py, TS, TS); } }
+  // luz: jogador + tochas das paredes (montada antes das entidades: as sombras apontam para longe delas)
+  const Tn = Luz.tenebraAtual(); const luzes = []; const jx = opc.jogador.x * TS + 16 - cam.x, jy = opc.jogador.y * TS + 16 - cam.y; luzes.push({ x: jx, y: jy, r: (opc.raio + 0.9) * TS * (1 - 0.18 * Tn), a: 1, quente: true });
+  for (const L of A.luzes) { const lx = L.x - cam.x, ly = L.y - cam.y; if (lx < -L.r || ly < -L.r || lx > VW.w + L.r || ly > VW.h + L.r) continue; const ix = Math.floor(L.x / TS), iy = Math.floor(L.y / TS) + 1; if (!d.explorado[iy * d.w + ix]) continue; luzes.push({ x: lx, y: ly + (Math.sin(tempo * 7 + L.x) * 1.2), r: L.r * (0.55 + (0.04 + 0.04 * Tn) * Math.sin(tempo * 9 + L.x)), a: 0.7, quente: true }); }
+  for (const L of opc.luzesExtra || []) luzes.push({ x: L.x * TS + 16 - cam.x, y: L.y * TS + 16 - cam.y, r: L.r, a: L.a ?? 0.8, quente: !!L.quente });
+  Luz.definirLuzes(luzes); Luz.sombrasMasmorra(ctx, VW, cam, d, opc.vis, { x0, y0, x1, y1 });
   if (opc.antes) opc.antes(ctx);
   const f = Math.floor(tempo * 2.2) % 2; void f; const lista = [...(opc.itens || [])]; lista.sort((a, b) => a.y - b.y); for (const e of lista) e.d(ctx);
   if (opc.depois) opc.depois(ctx);
-  // luz: jogador + tochas das paredes
-  const luzes = []; const jx = opc.jogador.x * TS + 16 - cam.x, jy = opc.jogador.y * TS + 16 - cam.y; luzes.push({ x: jx, y: jy, r: (opc.raio + 0.9) * TS, a: 1, quente: true });
-  for (const L of A.luzes) { const lx = L.x - cam.x, ly = L.y - cam.y; if (lx < -L.r || ly < -L.r || lx > VW.w + L.r || ly > VW.h + L.r) continue; const ix = Math.floor(L.x / TS), iy = Math.floor(L.y / TS) + 1; if (!d.explorado[iy * d.w + ix]) continue; luzes.push({ x: lx, y: ly + (Math.sin(tempo * 7 + L.x) * 1.2), r: L.r * (0.55 + 0.04 * Math.sin(tempo * 9 + L.x)), a: 0.7, quente: true }); }
-  for (const L of opc.luzesExtra || []) luzes.push({ x: L.x * TS + 16 - cam.x, y: L.y * TS + 16 - cam.y, r: L.r, a: L.a ?? 0.8, quente: !!L.quente });
-  aplicarEscuridao(ctx, VW.w, VW.h, luzes, opc.escuro ?? 0.82, '8,5,20');
+  aplicarEscuridao(ctx, VW.w, VW.h, luzes, Math.min(0.94, (opc.escuro ?? 0.82) + 0.1 * Tn), '8,5,20');
   if (opc.topo) opc.topo(ctx); void T;
 }

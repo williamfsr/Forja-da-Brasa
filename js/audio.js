@@ -22,6 +22,18 @@ function ruido(t0, dur, vol = 0.4, hp = 800) {
   const s = ctx.createBufferSource(); s.buffer = b; const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp; const g = ctx.createGain(); g.gain.value = vol;
   s.connect(f); f.connect(g); g.connect(mestre); s.start(t0);
 }
+function rumor(t0, dur, vol = 0.8, lp = 380) { // trovão: ruído grave que ribomba e some
+  if (!ctx) return; const n = Math.floor(ctx.sampleRate * dur), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0); let u = 0;
+  for (let i = 0; i < n; i++) { u = u * 0.965 + (Math.random() * 2 - 1) * 0.035; const k = i / n; d[i] = u * 22 * Math.pow(1 - k, 1.5) * (0.65 + 0.35 * Math.sin(i / ctx.sampleRate * 17)); }
+  const s = ctx.createBufferSource(); s.buffer = b; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(lp, t0); f.frequency.exponentialRampToValueAtTime(90, t0 + dur); const g = ctx.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(mestre); s.start(t0);
+}
+let chuvaNo = null; // chuva contínua (ruído filtrado), volume segue a intensidade do clima
+export function chuvaSom(n) {
+  if (!ctx) return; if (!ligado) n = 0; if (!chuvaNo) { if (n < 0.03) return;
+    const len = ctx.sampleRate * 2, b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0); let u = 0; for (let i = 0; i < len; i++) { u = u * 0.7 + (Math.random() * 2 - 1) * 0.3; d[i] = u; }
+    const src = ctx.createBufferSource(); src.buffer = b; src.loop = true; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2400; const g = ctx.createGain(); g.gain.value = 0; src.connect(f); f.connect(g); g.connect(mestre); src.start(); chuvaNo = { src, g }; }
+  chuvaNo.g.gain.setTargetAtTime(Math.min(1, n) * 0.2, ctx.currentTime, 0.8);
+}
 const N = (n) => 440 * Math.pow(2, (n - 69) / 12);
 const SONS = {
   select: (t) => nota(N(84), t, 0.04, 'square', 0.25),
@@ -46,6 +58,7 @@ const SONS = {
   armadilha: (t) => { ruido(t, 0.2, 0.5, 1500); nota(N(48), t, 0.2, 'square', 0.3, -100); },
   porta: (t) => { nota(N(55), t, 0.08, 'square', 0.25); nota(N(62), t + 0.08, 0.1, 'square', 0.25); },
   tocha: (t) => { ruido(t, 0.25, 0.25, 3000); },
+  trovao: (t) => rumor(t, 2.6, 0.9, 420),
   inercia: (t) => [48, 47, 46, 44].forEach((n, i) => nota(N(n), t + i * 0.18, 0.3, 'sawtooth', 0.25)),
 };
 export function sfx(nome) { if (!ligado || !iniciar()) return; const f = SONS[nome]; if (f) f(ctx.currentTime + 0.01); }
