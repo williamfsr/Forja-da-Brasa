@@ -31,3 +31,17 @@ Os nomes e termos em português do conteúdo de regras (magias, monstros, caract
 comunitária "dnd5e-pt-br" (decito, java3040, MagelaCE) — https://github.com/decito/dnd5e-pt-br — usada como
 referência de terminologia. Este projeto não é afiliado, endossado ou patrocinado pela Wizards of the Coast.
 História, personagens, mundo ("Forja da Brasa", Brasa, os capítulos e finais) e arte são originais deste projeto.
+
+
+3) ÍCONES — pasta assets/ic
+Ícones do game-icons.net (autores listados em assets/ic/CREDITOS.txt) e do The Noun Project, sob Creative Commons Attribution 3.0
+(CC BY 3.0, https://creativecommons.org/licenses/by/3.0/). Obtidos do sistema dnd5e para Foundry VTT (MIT) e convertidos em webp.
+
+4) ANIMAÇÕES — pasta assets/fx
+Derivadas de JB2A (Jules & Ben's Animations, pacote gratuito), https://www.jb2a.com, Creative Commons Attribution-NonCommercial-ShareAlike 4.0
+(CC BY-NC-SA 4.0, https://creativecommons.org/licenses/by-nc-sa/4.0/). Foram convertidas de vídeo para folhas de sprite webp, reduzidas e
+amostradas. Uso estritamente não comercial; redistribuição apenas sob a mesma licença.
+
+5) TOKENS E ARTE
+Tokens de herói (assets/tokens/heroi) e de monstros (assets/tokens/mon) foram gerados por programa (tools/arte) para este projeto e fazem
+parte do conteúdo original sob MIT. Os tokens da Forgotten Adventures e da Caeora distribuídos com o sistema dnd5e NÃO estão incluídos.

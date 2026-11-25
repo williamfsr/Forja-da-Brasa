@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#14101c">
-<meta name="description" content="Forja da Brasa — transforme treino, aeróbico, estudo e alimentação em uma aventura 8-bit de D&D do nível 1 ao 20.">
+<meta name="description" content="Forja da Brasa — transforme treino, aeróbico, estudo e alimentação em uma aventura 32 bits de D&D com personagem totalmente personalizável, do nível 1 ao 20.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -20,10 +20,9 @@
   <header id="hud" aria-label="Status do herói"></header>
   <main id="jogo">
     <div id="vista">
-      <canvas id="tela" width="240" height="176" aria-label="Mapa do jogo"></canvas>
+      <canvas id="tela" width="320" height="240" aria-label="Mapa do jogo"></canvas>
       <div id="bt" class="oculto">
-        <div id="bt-m" class="bt-caixa"></div>
-        <div id="bt-h" class="bt-caixa"></div>
+        <div id="bt-ordem" aria-label="Ordem de iniciativa"></div>
         <div id="bt-log" aria-live="polite"></div>
       </div>
     </div>
@@ -50,7 +49,7 @@
 </div>
 
 <div id="dialogo" class="oculto" role="dialog">
-  <div class="dialogo-caixa"><div class="dialogo-nome"></div><div class="dialogo-txt"></div><div class="dialogo-seta">▼</div></div>
+  <div class="dialogo-caixa"><div class="dialogo-retrato"></div><div class="dialogo-nome"></div><div class="dialogo-txt"></div><div class="dialogo-opcoes"></div><div class="dialogo-seta">▼</div></div>
 </div>
 
 <div id="popup" class="oculto" role="dialog" aria-modal="true"><div class="popup-caixa"></div></div>
@@ -58,7 +57,7 @@
 <div id="titulo">
   <div class="titulo-logo"><div class="titulo-brasa">🔥</div><h1>FORJA<br>DA BRASA</h1><p>Cada série, cada passo, cada página e cada refeição acendem a Brasa.</p></div>
   <div class="titulo-menu" id="titulo-menu"></div>
-  <div class="titulo-rodape">Aventura 8-bit · D&amp;D 5e (SRD) · Nível 1 a 20</div>
+  <div class="titulo-rodape">Aventura 32 bits · D&amp;D 5e (SRD) · Nível 1 a 20</div>
 </div>
 
 <noscript><p style="color:#fff;padding:2rem">Este jogo precisa de JavaScript habilitado.</p></noscript>
