@@ -6,13 +6,18 @@ import { LIFTS, TIERS, TIER_COR, RAR_COR } from './conteudo.js';
 import { CAPITULOS, ATOS, PROLOGO, FINAIS } from './story.js';
 import * as B from './uibase.js';
 import { $, esc, fmt, val, valNum, toast, popup, popupAtualizar, registrar, abrirPainel, fecharPainel, rerender, confirmar } from './uibase.js';
-import { S, tierTag, descItem, nomeItem } from './uiutil.js';
+import { S, tierTag, descItem, nomeItem, icoItem } from './uiutil.js';
 import './paineis1.js';
 import './paineis2.js';
+import './paineis3.js';
+import './grimorio.js';
 import { G } from './game.js';
 import * as Au from './audio.js';
 import { montarEditor } from './criador.js';
 import { apPadrao, CORES_CLASSE } from './cosmeticos.js';
+import { retrato } from './pessoa.js';
+import { visDe } from './render.js';
+B.definirHeroiCena(() => { const s = St.S; return s ? retrato(s.heroi.ap, visDe(s), 4) : null; }, () => (St.S ? St.S.heroi.nome : 'Você'));
 
 // ======================= HUD =======================
 const mini = (v, max, cls) => `<span class="mini ${cls}">${Array.from({ length: max }, (_, i) => `<b class="${i < v ? 'on' : ''}"></b>`).join('')}</span>`;
@@ -49,7 +54,7 @@ async function itemPopup(p) {
 async function popupBau(p) {
   const r = p.r; let t = null;
   const rolando = `<h2>BAÚ!</h2><div class="d20" id="d20x">?</div><p class="suave">Rolando d20 + ${r.forca + r.bonus}…</p>`;
-  const cor = RAR_COR[r.rarNome] || '#fff'; const itens = r.itens.map((id) => { const it = ITENS[id]; return `<div class="item-linha"><b style="color:${RAR_COR[it.raro]}">${esc(it.nome)}</b> <span class="suave">· ${esc(it.raro)}</span><br><span class="peq suave">${esc(descItem(it))}</span></div>`; }).join('');
+  const cor = RAR_COR[r.rarNome] || '#fff'; const itens = r.itens.map((id) => { const it = ITENS[id]; return `<div class="item-linha">${icoItem(it)}<b style="color:${RAR_COR[it.raro]}">${esc(it.nome)}</b> <span class="suave">· ${esc(it.raro)}</span><br><span class="peq suave">${esc(descItem(it))}</span></div>`; }).join('');
   const final = `<h2>BAÚ!</h2><div class="d20 pronto" style="${r.d20 === 20 ? 'background:#ff9f40' : r.d20 === 1 ? 'background:#8a8a96' : ''}">${r.d20}</div><p class="peq suave">d20 ${r.d20} + ${r.forca} (baú) + ${r.bonus} (sequência/sorte) = <b>${r.total}</b></p><p><span class="rar" style="background:${cor}">${esc(r.rarNome.toUpperCase())}</span></p>${r.d20 === 20 ? '<p class="gold">CRÍTICO! Raridade máxima!</p>' : r.d20 === 1 ? '<p class="verm">Falha crítica: raridade reduzida.</p>' : ''}<p class="gold">+${r.ouro} 🪙</p>${itens}${r.tocha ? '<p class="gold">🕯️ +1 Tocha!</p>' : ''}${btnOk('Pegar tudo!')}`;
   const pr = popup(rolando, { aoMostrar: () => { let n = 0; t = setInterval(() => { const e = document.getElementById('d20x'); if (e) e.textContent = 1 + Math.floor(Math.random() * 20); Au.sfx('rolar'); if (++n >= 11) { clearInterval(t); Au.sfx(r.rar >= 3 ? 'pr' : 'chest'); Au.vibrar(r.rar >= 3 ? 120 : 40); popupAtualizar(final); } }, 100); } });
   await pr; clearInterval(t);
@@ -162,7 +167,7 @@ export function instalarUi() {
   B.ligarPainel();
   G.ui = {
     modalAberto: () => B.painelAberto() || B.dialogoAberto() || B.popupAberto() || !$('#titulo').classList.contains('oculto') || (St.S == null && G.modo === 'titulo'),
-    dialogoAberto: B.dialogoAberto, dialogoAvancar: B.dialogoAvancar, fechar: () => { if (B.painelAberto()) fecharPainel(); }, painel: abrirPainel, toast, dialogo: B.dialogo, dialogoEscolha: B.dialogoEscolha,
+    dialogoAberto: B.dialogoAberto, dialogoAvancar: B.dialogoAvancar, dialogoNavegar: B.dialogoNavegar, fechar: () => { if (B.painelAberto()) fecharPainel(); }, painel: abrirPainel, toast, dialogo: B.dialogo, dialogoEscolha: B.dialogoEscolha,
     confirmar, tentarCapitulo, fimCapitulo, fimDeJogo, hud, drenar,
   };
   St.bus.on('mudou', hud); St.bus.on('popup', () => setTimeout(drenar, 30)); setInterval(drenar, 400); setInterval(tick, 1000);

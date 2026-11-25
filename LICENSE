@@ -27,9 +27,14 @@ This work includes material taken from the System Reference Document 5.1 ("SRD 5
 available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative
 Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.
 
+As maestrias de arma (js/maestrias.js) vêm do System Reference Document 5.2.1 (CC-BY-4.0) de Wizards of the Coast LLC:
+https://www.dndbeyond.com/srd — "This work includes material taken from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC."
+
 Os nomes e termos em português do conteúdo de regras (magias, monstros, características) seguem a tradução
 comunitária "dnd5e-pt-br" (decito, java3040, MagelaCE) — https://github.com/decito/dnd5e-pt-br — usada como
 referência de terminologia. Este projeto não é afiliado, endossado ou patrocinado pela Wizards of the Coast.
+As descrições das 283 magias (js/dados/magias_srd*.js) vêm do SRD 5.1 (CC-BY-4.0), lidas dos compêndios do sistema dnd5e 6.1.x (MIT) e do
+dnd5e-pt-br; os efeitos de jogo associados a cada magia (tools/dados/magias_spec.py) são código original deste projeto (MIT).
 História, personagens, mundo ("Forja da Brasa", Brasa, os capítulos e finais) e arte são originais deste projeto.
 
 
@@ -45,3 +50,9 @@ amostradas. Uso estritamente não comercial; redistribuição apenas sob a mesma
 5) TOKENS E ARTE
 Tokens de herói (assets/tokens/heroi) e de monstros (assets/tokens/mon) foram gerados por programa (tools/arte) para este projeto e fazem
 parte do conteúdo original sob MIT. Os tokens da Forgotten Adventures e da Caeora distribuídos com o sistema dnd5e NÃO estão incluídos.
+Os ícones de item por categoria (assets/ic/items/*.webp, gerados por tools/arte/gerar_icones_itens.py) também são arte original deste projeto (MIT),
+exceto os seis ícones de tipo herdados do dnd5e (CC BY 3.0, ver seção 3).
+
+
+6) ADAPTAÇÃO NARRATIVA
+A campanha e os diálogos são originais, apenas inspirados na *estrutura* de uma aventura gótica clássica de D&D (vilão que observa e conversa, vilas, leitora de cartas, caçadores, templo de dádivas, trono final). Nenhum texto, nome próprio, mapa ou ilustração da obra original é copiado; os nomes, falas e personagens são do universo "Forja da Brasa". Projeto de fã, sem afiliação com a Wizards of the Coast.

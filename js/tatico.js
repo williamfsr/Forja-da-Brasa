@@ -1,9 +1,11 @@
 // Motor de combate TÁTICO por turnos no mapa (regras do D&D 5e / SRD): iniciativa, movimento em grade, ataques de oportunidade,
 // flanco, linha de visão, magias em área (círculo, cone, linha, corrente), aliados, conversão por persuasão/magia. Sem DOM.
 import { MAGIAS, ITENS, rolar, d20 } from './srd.js';
-import { derivar } from './rules.js';
+import { derivar, criarMonstro, escalaNivel } from './rules.js';
+import { bfSoma, bfTem, bfLista, CONDS_NEG, CONDS_POS } from './bf.js';
 import { RACAS } from './cosmeticos.js';
 import { TEMPERAMENTOS, linhasConversa } from './personalidade.js';
+import { CLASSES_MAESTRIA, MAESTRIAS, maestriaDe } from './maestrias.js';
 
 const msg = (txt, snd) => ({ t: 'msg', txt, snd });
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
@@ -21,10 +23,11 @@ const hpMaxEf = (u) => Math.max(1, u.hpMax - (u.hpMaxMod || 0));
 export function criarGrade(w, h, solidoFn) { return { w, h, solido: (x, y) => x < 0 || y < 0 || x >= w || y >= h || !!(solidoFn && solidoFn(x, y)) }; }
 function linhaTiles(x0, y0, x1, y1) { const out = []; let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx - dy, x = x0, y = y0; for (let i = 0; i < 80; i++) { out.push([x, y]); if (x === x1 && y === y1) break; const e2 = 2 * err; if (e2 > -dy) { err -= dy; x += sx; } if (e2 < dx) { err += dx; y += sy; } } return out; }
 export function temLOS(B, a, b) { const t = linhaTiles(a.x, a.y, b.x, b.y); for (let i = 1; i < t.length - 1; i++) if (B.g.solido(t[i][0], t[i][1])) return false; return true; }
-export const unidadeEm = (B, x, y) => B.un.find((u) => u.vivo && !u.saiu && u.x === x && u.y === y) || null;
-export const vivos = (B, eq) => B.un.filter((u) => u.vivo && !u.saiu && (!eq || u.eq === eq));
-export const inimigosDe = (B, u) => B.un.filter((x) => x.vivo && !x.saiu && x.eq !== u.eq);
-export const aliadosDe = (B, u) => B.un.filter((x) => x.vivo && !x.saiu && x.eq === u.eq && x !== u);
+const emCena = (u) => u.vivo && !u.saiu && !(u.conds && u.conds.banido > 0);
+export const unidadeEm = (B, x, y) => B.un.find((u) => emCena(u) && u.x === x && u.y === y) || null;
+export const vivos = (B, eq) => B.un.filter((u) => emCena(u) && (!eq || u.eq === eq));
+export const inimigosDe = (B, u) => B.un.filter((x) => emCena(x) && x.eq !== u.eq);
+export const aliadosDe = (B, u) => B.un.filter((x) => emCena(x) && x.eq === u.eq && x !== u);
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 // Dijkstra 8 direções (diagonal custa 1; não corta quina de parede; passa por aliados, não por inimigos)
 export function alcance(B, u, max) {
@@ -43,30 +46,30 @@ export function escalaGrupo(n) { if (n <= 1) return { hp: 1, dm: 1 }; const x = 
 function unidadeMonstro(m, eq, id, pos, rng) {
   const atq = (m.atq || []).map((a) => ({ ...a, alc: a.r || a.alc || (ehDistAtq(a) ? 7 : 1) }));
   return { id, eq, heroi: false, nome: m.n || m.nome, hp: m.hp, hpMax: m.hpMax || m.hp, ca: m.ca, cr: m.cr || 0, atq, esp: JSON.parse(JSON.stringify(m.esp || {})), res: m.res || [], imu: m.imu || [], vul: m.vul || [], f: m.f || null, tags: m.tags || [], spr: m.spr, pal: m.pal || {}, ap: m.ap || null, mon: m.id, tok: m.tok || null, tam: m.tam || null, chefe: !!m.chefe, dm: m.dm || 1,
-    vel: m.vel || VEL[m.spr] || 6, x: pos.x, y: pos.y, ini: (rng ? Math.floor((m.cr || 0) / 3) : 0), conds: {}, vivo: true, saiu: false, rodada: 0, sopro: true, saveBonus: m.saveBonus,
+    vel: m.vel || VEL[m.spr] || 6, x: pos.x, y: pos.y, ini: (rng ? Math.floor((m.cr || 0) / 3) : 0), conds: {}, bf: {}, tmpHp: 0, vivo: true, saiu: false, rodada: 0, sopro: true, saveBonus: m.saveBonus,
     racional: !!m.racional, arq: m.arq || null, frase: m.frase || null, atitude: 0, paciencia: 3, tmp: m.tmp || 'neutro', dc: m.dcSocial || 0, ouro: m.ouro || 0, recrutavel: !!m.recrutavel, mono: m, acoes: 1, bonus: 1, reacao: 1, movRest: 0, desengajou: false };
 }
 function unidadeHeroi(s, pos, rng, tem) {
   const D = derivar(s), h = s.heroi, rec = JSON.parse(JSON.stringify(s.recursos)); const raca = RACAS[(h.ap && h.ap.raca) || 'humano'] || RACAS.humano;
   const ex = h.exaustao || 0; let vel = (raca.vel || 6) + (h.cls === 'barbaro' && h.nivel >= 5 ? 1 : 0); if (ex >= 2) vel = Math.max(2, Math.floor(vel / 2));
-  const u = { id: 'h', eq: 'j', heroi: true, nome: h.nome, cls: h.cls, L: h.nivel, hp: Math.min(h.hp ?? D.hpMax, D.hpMax), hpMax: D.hpMax, hpMaxMod: 0, ca: D.ca, caBase: D.ca, prof: D.prof, M: D.M, A: D.A,
+  const u = { id: 'h', eq: 'j', heroi: true, nome: h.nome, cls: h.cls, L: h.nivel, hp: Math.min(h.hp ?? D.hpMax, D.hpMax), hpMax: D.hpMax, hpMaxMod: 0, maest: CLASSES_MAESTRIA.includes(h.cls) ? maestriaDe(D.arma) : null, ca: D.ca, caBase: D.ca, prof: D.prof, M: D.M, A: D.A,
     arma: D.arma, ataques: D.ataques, critMin: D.critMin, modAtq: D.modAtq, modDano: D.modDano, cd: D.cd, atqMagia: D.atqMagia, modConj: D.modConj, conj: D.conj,
     ini: D.ini - (h.sono ? 2 : 0), slots: rec.slots, cont: rec.cont, insp: h.insp || 0, exaust: ex, regen: D.regen, resFogo: D.resFogo || !!raca.resFogo, conds: {}, letargia: 0,
-    acoes: 1, bonus: 1, reacao: 1, esq: false, primeiro: true, implacavel: 0, raca, raçaId: (h.ap && h.ap.raca) || 'humano', ap: h.ap || null, vel, movRest: 0, x: pos.x, y: pos.y, vivo: true, saiu: false, atq: [], esp: {}, tags: ['heroi'], cr: 0, desengajou: false, sopro: true, fugiu: false, racialUsado: false };
+    acoes: 1, bonus: 1, reacao: 1, esq: false, bf: {}, tmpHp: 0, conc: null, primeiro: true, implacavel: 0, raca, raçaId: (h.ap && h.ap.raca) || 'humano', ap: h.ap || null, vel, movRest: 0, x: pos.x, y: pos.y, vivo: true, saiu: false, atq: [], esp: {}, tags: ['heroi'], cr: 0, desengajou: false, sopro: true, fugiu: false, racialUsado: false };
   void rng; void tem; return u;
 }
 // inimigos: lista de monstros (de criarMonstro). opts.pos: { heroi:{x,y}, ini:[{x,y}...], aliados:[{x,y}...] }
 export function novaBatalha(s, inimigos, g, opts = {}) {
   const rng = opts.rng || Math.random; const pos = opts.pos || {};
-  const B = { rng, s, g, un: [], rodada: 1, fim: null, i: 0, ordem: [], inv: (s.inv || []).map((x) => ({ ...x })), usados: [], baixas: [], chefe: false, surpresa: !!opts.surpresa, ev: [], falou: new Set() };
+  const B = { rng, s, g: { ...g, solido: (x, y) => g.solido(x, y) || (B.paredes && B.paredes.has(K(x, y))) }, paredes: new Map(), un: [], rodada: 1, fim: null, i: 0, ordem: [], inv: (s.inv || []).map((x) => ({ ...x })), usados: [], baixas: [], chefe: false, surpresa: !!opts.surpresa, ev: [], falou: new Set() };
   const hp = pos.heroi || { x: 2, y: 4 }; const h = unidadeHeroi(s, hp, rng); B.h = h; B.un.push(h);
   (opts.aliados || []).forEach((a, i) => { const p = (pos.aliados || [])[i] || livreProximo(B, hp.x, hp.y, 3); const u = unidadeMonstro(a, 'j', 'a' + i, p, rng); u.ini = 2; u.aliadoFixo = true; u.saveBonus = a.saveBonus ?? (2 + Math.floor((s.heroi.nivel || 1) / 3)); B.un.push(u); });
   inimigos.forEach((m, i) => { const p = (pos.ini || [])[i] || livreProximo(B, hp.x + 6, hp.y, 5); const u = unidadeMonstro(m, 'm', 'm' + i, p, rng); if (m.chefe) B.chefe = true; if (B.surpresa) u.conds.surpreso = true; B.un.push(u); });
-  const evs = [];
+  const evPre = []; aplicarProntos(B, h, evPre); const evs = [];
   for (const u of B.un) u.rolagem = d20(rng) + u.ini + (u.heroi && u.exaust >= 2 ? -99 : 0) + (u.heroi && !B.surpresa ? 0 : 0);
   B.ordem = [...B.un].sort((a, b) => b.rolagem - a.rolagem || (b.ini - a.ini)).map((u) => u.id);
   if (B.surpresa) evs.push(msg('Você pegou o inimigo de surpresa!'));
-  evs.push({ t: 'ordem', ordem: [...B.ordem] });
+  evs.push({ t: 'ordem', ordem: [...B.ordem] }); evs.push(...evPre);
   if (!opts.adiar) avancar(B, evs);
   return { B, ev: evs };
 }
@@ -78,6 +81,7 @@ export const ativo = (B) => porId(B, B.ordem[B.i]);
 // ---------- d20 e dano ----------
 function jogaD20(B, vant, desv, sorte) { let r = d20(B.rng); if (sorte && r === 1) r = d20(B.rng); if (vant && !desv) return Math.max(r, d20(B.rng)); if (desv && !vant) return Math.min(r, d20(B.rng)); return r; }
 function resistir(u, n, tipo, fonte) {
+  if (u.bf) { const t0 = tipo || 'fis'; if (bfLista(u, 'imuB').includes(t0)) return 0; if (bfLista(u, 'res').includes(t0)) n = Math.floor(n / 2); }
   if (u.heroi) { if (u.conds.furia && (tipo === 'fis' || !tipo)) n = Math.floor(n / 2); if (tipo === 'fogo' && u.resFogo) n = Math.floor(n / 2); if ((tipo === 'veneno') && u.raca && u.raca.resVeneno) n = Math.floor(n / 2); }
   else { const t = tipo || 'fis'; const magico = !!(fonte && fonte.arma && fonte.arma.mag > 0 && t === 'fis');
     if (!magico) { if (u.imu && u.imu.includes(t)) return 0; if (u.res && u.res.includes(t)) n = Math.floor(n / 2); }
@@ -88,13 +92,16 @@ function dano(B, u, n, tipo, evs, crit, fonte) {
   n = Math.max(0, Math.round(resistir(u, n, tipo, fonte))); if (u.conds.dormindo) { u.conds.dormindo = false; evs.push({ t: 'cond', id: u.id, cond: 'dormindo', on: false }); evs.push(msg(`${u.nome} acorda!`)); }
   if (u.conds.pacificado && fonte && fonte.eq !== u.eq) { u.conds.pacificado = 0; }
   if (u.conds.convertidoTmp && fonte && fonte.eq !== u.eq && fonte.heroi) { /* quebra o encanto */ u.eq = 'm'; u.conds.convertidoTmp = 0; evs.push(msg(`${u.nome} se livra do encanto!`)); }
+  if (u.tmpHp > 0 && n > 0) { const ab = Math.min(u.tmpHp, n); u.tmpHp -= ab; n -= ab; evs.push(msg(`PV temporários absorvem ${ab}.`)); if (u.tmpHp <= 0) for (const k of Object.keys(u.bf || {})) if (u.bf[k].ef.tmpHp) removerBuff(B, u, k, evs); }
   u.hp -= n; if (tipo === 'fogo' || tipo === 'ácido') u.queimou = true; evs.push({ t: 'dano', id: u.id, n, tipo, crit: !!crit, de: fonte ? fonte.id : null });
+  if (u.conc && u.hp > 0 && n > 0 && !(u.hp <= 0)) { const dc = Math.max(10, Math.floor(n / 2)); const r = d20(B.rng) + (u.M ? u.M.CON : 0) + (u.cls === 'clerigo' ? u.prof : 0); if (r < dc) { evs.push(msg(`Concentração perdida! ${u.conc.nome} termina.`)); fimConc(B, u, evs); } }
   if (u.hp <= 0 && !u.heroi && u.esp && u.esp.fortitude && tipo !== 'radiante' && !crit && !u.fortUsou) { const con = Math.floor(((u.f ? u.f[2] : 10) - 10) / 2); if (d20(B.rng) + con >= 5 + n) { u.fortUsou = true; u.hp = 1; evs.push(msg(`${u.nome} se recusa a cair!`)); } }
   if (u.hp <= 0) morrer(B, u, evs, fonte);
   return n;
 }
 function morrer(B, u, evs, fonte) {
   if (u.heroi) {
+    if (bfTem(u, 'ward')) { const k = Object.keys(u.bf).find((q) => u.bf[q].ef.ward); const f = u.bf[k].ef.wardF; removerBuff(B, u, k, evs); u.hp = Math.max(1, Math.floor(hpMaxEf(u) * (f || 0))); evs.push(msg('A proteção contra a morte te mantém de pé!', 'heal')); evs.push({ t: 'fx', id: 'cura', alvo: u.id }); return; }
     if (u.conds.furia && u.L >= 11) { const dc = 10 + 5 * u.implacavel; const r = d20(B.rng) + u.M.CON; u.implacavel++; if (r >= dc) { u.hp = u.L * 2; evs.push(msg('Fúria Implacável! Você se recusa a cair.', 'heal')); return; } }
     if (u.raca && u.raca.implacavel && !u.racialUsado) { u.racialUsado = true; u.hp = 1; evs.push(msg('Resistência Implacável! Você fica de pé com 1 PV.', 'heal')); return; }
     u.hp = 0; u.vivo = false; B.fim = 'derrota'; evs.push({ t: 'morte', id: u.id }); evs.push(msg('Você caiu...', 'lose')); return;
@@ -102,15 +109,16 @@ function morrer(B, u, evs, fonte) {
   u.hp = 0; u.vivo = false; evs.push({ t: 'morte', id: u.id }); if (u.eq === 'm') { B.baixas.push({ id: u.id, nome: u.nome, mon: u.mono, como: 'morto', u }); evs.push(msg(`${u.nome} foi derrotado!`, 'win')); } else evs.push(msg(`${u.nome} desabou!`));
   void fonte; checaFim(B, evs);
 }
-function checaFim(B, evs) { if (B.fim) return true; if (!B.h.vivo) { B.fim = 'derrota'; return true; } if (B.h.fugiu) { B.fim = 'fuga'; return true; } if (!vivos(B, 'm').length) { B.fim = B.baixas.some((b) => b.como === 'morto') || !B.baixas.length ? 'vitoria' : 'vitoria'; evs.push({ t: 'fimcombate', res: 'vitoria' }); return true; } return false; }
+function checaFim(B, evs) { if (B.fim) return true; if (!B.h.vivo) { B.fim = 'derrota'; return true; } if (B.h.fugiu) { B.fim = 'fuga'; return true; } if (!vivos(B, 'm').length && !B.un.some((q) => q.eq === 'm' && q.vivo && !q.saiu && q.conds.banido > 0)) { B.fim = B.baixas.some((b) => b.como === 'morto') || !B.baixas.length ? 'vitoria' : 'vitoria'; evs.push({ t: 'fimcombate', res: 'vitoria' }); return true; } return false; }
 function cura(B, u, n, evs) { n = Math.max(0, Math.min(hpMaxEf(u) - u.hp, n)); u.hp += n; evs.push({ t: 'cura', id: u.id, n }); return n; }
 
 // ---------- vantagem, flanco ----------
 function flanqueado(B, a, alvo) { const ox = alvo.x * 2 - a.x, oy = alvo.y * 2 - a.y; const o = unidadeEm(B, ox, oy); return !!(o && o.eq === a.eq && o !== a && !o.conds.dormindo && !o.conds.paralisado); }
-const incapaz = (u) => !!(u.conds.dormindo || u.conds.paralisado);
+const incapaz = (u) => !!(u.conds.dormindo || u.conds.paralisado || u.conds.atordoado);
 function vantDesv(B, a, alvo, dist, extra = {}) {
-  let vant = !!extra.vant, desv = !!extra.desv; if (incapaz(alvo)) vant = true; if (a.conds.amedrontado) desv = true; if (alvo.conds.esquivando) desv = true; if (a.conds.lento) desv = true; if (a.conds.cego) desv = true;
-  if (dist > 1 && inimigosDe(B, a).some((e) => cheb(e, a) <= 1 && !incapaz(e))) desv = true;
+  let vant = !!extra.vant, desv = !!extra.desv; if (incapaz(alvo)) vant = true; if (a.conds.amedrontado) desv = true; if (alvo.conds.esquivando) desv = true; if (a.conds.lento) desv = true; if (a.conds.cego) desv = true; if (alvo.conds.cego || alvo.conds.contido) vant = true; if (a.conds.contido) desv = true; if (a.conds.sap) desv = true; if (a.conds.caido) desv = true; if (alvo.conds.caido) { if (dist <= 1) vant = true; else desv = true; }
+  if (alvo.bf && bfTem(alvo, 'desvContra')) desv = true; { const ct = bfLista(alvo, 'contraTags'); if (ct.length && ((a.tags || []).some((t) => ct.includes(t)) || (a.mono && ct.includes(a.mono.tp)))) desv = true; }
+  if (a.bf && bfTem(a, 'vantAtq')) vant = true;   if (dist > 1 && inimigosDe(B, a).some((e) => cheb(e, a) <= 1 && !incapaz(e))) desv = true;
   if (dist <= 1 && flanqueado(B, a, alvo)) vant = true;
   if (a.mono && (a.spr === 'lobo' || (a.esp && a.esp.bando)) && aliadosDe(B, a).some((x) => cheb(x, alvo) <= 1 && x.eq === a.eq)) vant = true;
   if (a.heroi && (a.conds.vant || a.conds.descuidado)) vant = true; if (alvo.heroi && alvo.conds.descuidado) vant = true; if (a.heroi && a.exaust >= 3) desv = true;
@@ -121,14 +129,15 @@ function vantDesv(B, a, alvo, dist, extra = {}) {
 export function alcanceArma(u) { return u.arma && u.arma.dist ? 7 : u.arma && u.arma.alc ? 2 : 1; }
 function ataqueHeroi(B, u, alvo, evs, op = {}) {
   const L = u.L, cls = u.cls; let n = u.ataques + (u.conds.furia && cls === 'barbaro' && L >= 3 ? 1 : 0); let smiteUsado = false; const sorte = !!(u.raca && u.raca.sortudo);
-  let cur = alvo; evs.push({ t: 'atq', de: u.id, para: alvo.id, tipo: u.arma && u.arma.dist ? 'dist' : 'melee', arma: u.arma && u.arma.nome });
+  let cur = alvo; quebrarInvis(B, u, evs); evs.push({ t: 'atq', de: u.id, para: alvo.id, tipo: u.arma && u.arma.dist ? 'dist' : 'melee', arma: u.arma && u.arma.nome });
   for (let i = 0; i < n && !B.fim; i++) {
     if (!cur || !cur.vivo || cur.saiu) { const prox = inimigosDe(B, u).filter((e) => cheb(e, u) <= alcanceArma(u) && (alcanceArma(u) === 1 || temLOS(B, u, e))).sort((a, b) => a.hp - b.hp)[0]; if (!prox) break; cur = prox; evs.push({ t: 'atq', de: u.id, para: cur.id, tipo: 'melee' }); }
-    const d = cheb(u, cur); const { vant, desv } = vantDesv(B, u, cur, d);
-    const r = jogaD20(B, vant, desv, sorte); const bencao = u.conds.bencao ? rolar('1d4', B.rng).total : 0; let total = r + u.modAtq + bencao - u.letargia;
+    const d = cheb(u, cur); const vexV = !!(u.vex && u.vex.id === cur.id); const { vant, desv } = vantDesv(B, u, cur, d, { vant: vexV }); if (vexV) u.vex = null;
+    const r = jogaD20(B, vant, desv, sorte); const bencao = u.conds.bencao ? rolar('1d4', B.rng).total : 0; let total = r + u.modAtq + bencao - u.letargia + bfSoma(u, 'atq'); for (const k of Object.keys(u.bf)) if (u.bf[k].ef.uso1 && u.bf[k].ef.vantAtq) removerBuff(B, u, k, evs);
+    if (cur.imagens > 0 && espelhar(B, cur, total, evs)) { evs.push({ t: 'erro', id: cur.id, de: u.id, rolagem: r, total }); continue; }
     if (op.sorte && total < cur.ca && u.cont.sorte > 0 && r !== 1) { u.cont.sorte--; total = 99; evs.push(msg('Golpe de Sorte!')); }
     const crit = (r >= u.critMin && r !== 1) || (incapaz(cur) && d <= 1 && total >= cur.ca); const acerta = r !== 1 && (crit || total >= cur.ca);
-    if (!acerta) { evs.push({ t: 'erro', id: cur.id, de: u.id, rolagem: r, total }); continue; }
+    if (!acerta) { evs.push({ t: 'erro', id: cur.id, de: u.id, rolagem: r, total }); if (u.maest === 'graze') { const g = Math.max(0, u.modDano - (u.arma.mag || 0)); if (g > 0) { evs.push(msg(`Esfolar: ${g} de dano mesmo errando.`)); dano(B, cur, g, 'fis', evs, false, u); } } continue; }
     const dado = u.arma.dado; let tot = rolar(dado, B.rng, crit).total + u.modDano; let extra = '';
     if (u.arma.extra) tot += rolar(u.arma.extra.dado, B.rng, crit).total;
     if (u.arma.contra && (cur.tags || []).includes(u.arma.contra.tp)) tot += rolar(u.arma.contra.dado, B.rng, crit).total;
@@ -137,25 +146,54 @@ function ataqueHeroi(B, u, alvo, evs, op = {}) {
     if (u.conds.furia) tot += L >= 16 ? 4 : L >= 9 ? 3 : 2;
     if (cls === 'barbaro' && crit && L >= 9) { const k = L >= 17 ? 3 : L >= 13 ? 2 : 1; tot += rolar(`${k}${dado.replace(/^\d+/, '')}`, B.rng).total; }
     if (cls === 'paladino' && !u.arma.duas && !u.arma.dist) tot += 2;
+    tot += bfSoma(u, 'dano');
     if (u.conds.favor) tot += rolar('1d4', B.rng, crit).total;
     if (cls === 'clerigo' && L >= 8) tot += rolar('1d8', B.rng, crit).total;
     if (cls === 'ladino' && !u.furtivoUsado) { const aliadoPerto = aliadosDe(B, u).some((x) => cheb(x, cur) <= 1 && !incapaz(x)); if ((vant && !desv) || aliadoPerto || (u.primeiro && (B.surpresa && L >= 1))) { u.furtivoUsado = true; tot += rolar(`${Math.ceil(L / 2)}d6`, B.rng, crit).total; extra = ' (Ataque Furtivo!)'; } }
-    if (cls === 'paladino') { if (op.smite > 0 && !smiteUsado && u.slots[op.smite - 1] > 0) { u.slots[op.smite - 1]--; smiteUsado = true; tot += rolar(`${Math.min(5, 1 + op.smite)}d8`, B.rng, true).total; extra = ' (Destruição Divina!)'; } if (L >= 11) tot += rolar('1d8', B.rng, crit).total; }
-    evs.push(msg(`Você acerta${crit ? ' um CRÍTICO' : ''}${extra}!`, crit ? 'crit' : 'hit')); dano(B, cur, tot, 'fis', evs, crit, u);
+    if (cls === 'paladino') { if (op.smite > 0 && !smiteUsado && u.slots[op.smite - 1] > 0) { u.slots[op.smite - 1]--; smiteUsado = true; tot += rolar(`${Math.min(5, 1 + op.smite)}d8`, B.rng, true).total; extra = ' (Destruição Divina!)'; evs.push({ t: 'fx', id: 'castigo', alvo: cur.id }); } if (L >= 11) tot += rolar('1d8', B.rng, crit).total; }
+    evs.push(msg(`Você acerta${crit ? ' um CRÍTICO' : ''}${extra}!`, crit ? 'crit' : 'hit')); dano(B, cur, tot, 'fis', evs, crit, u); if (!B.fim) maestriaAcerto(B, u, cur, evs); if (!B.fim && cur.vivo) marcaRadiante(B, u, cur, evs, crit);
   }
+  if (!B.fim && u.maest === 'nick' && !u.nickUsado && !(u.arma && u.arma.dist)) { const alvoN = cur && cur.vivo && !cur.saiu && cheb(u, cur) <= alcanceArma(u) ? cur : inimigosDe(B, u).filter((e) => cheb(e, u) <= alcanceArma(u)).sort((a, b) => a.hp - b.hp)[0]; if (alvoN) { u.nickUsado = true; golpeSec(B, u, alvoN, evs, 'Entalhar'); } }
   u.conds.vant = false; u.conds.guiado = false; u.primeiro = false;
 }
+// ---------- maestrias de arma (SRD 5.2.1) ----------
+function golpeSec(B, u, alvo, evs, rot) { // ataque extra sem modificador de atributo no dano
+  if (!alvo || !alvo.vivo || alvo.saiu || B.fim) return;
+  evs.push({ t: 'atq', de: u.id, para: alvo.id, tipo: 'melee', arma: u.arma && u.arma.nome });
+  const { vant, desv } = vantDesv(B, u, alvo, cheb(u, alvo)); const r = jogaD20(B, vant, desv); const total = r + u.modAtq - u.letargia; const crit = r >= u.critMin && r !== 1;
+  if (r === 1 || (!crit && total < alvo.ca)) { evs.push({ t: 'erro', id: alvo.id, de: u.id, rolagem: r, total }); return; }
+  const mag = u.arma.mag || 0; let tot = rolar(u.arma.dado, B.rng, crit).total + mag + Math.min(0, u.modDano - mag); if (u.conds.furia) tot += u.L >= 16 ? 4 : u.L >= 9 ? 3 : 2;
+  evs.push(msg(`${rot}: golpe extra!`, 'hit')); dano(B, alvo, Math.max(1, tot), 'fis', evs, crit, u);
+}
+function empurrar(B, u, alvo, casas, evs) {
+  const dx = Math.sign(alvo.x - u.x), dy = Math.sign(alvo.y - u.y); if (!dx && !dy) return; const cam = [];
+  let x = alvo.x, y = alvo.y; for (let i = 0; i < casas; i++) { const nx = x + dx, ny = y + dy; if (B.g.solido(nx, ny) || (dx && dy && (B.g.solido(x + dx, y) || B.g.solido(x, y + dy))) || unidadeEm(B, nx, ny)) break; x = nx; y = ny; cam.push([x, y]); }
+  if (!cam.length) return; alvo.x = x; alvo.y = y; evs.push({ t: 'mov', id: alvo.id, caminho: cam });
+}
+function maestriaAcerto(B, u, cur, evs) {
+  const m = u.maest; if (!m || !cur) return; const nome = MAESTRIAS[m].nome;
+  if (m === 'cleave' && !u.arma.dist && !u.cleaveUsado) { const o = inimigosDe(B, u).filter((e) => e !== cur && e.vivo && cheb(e, cur) <= 1 && cheb(e, u) <= alcanceArma(u)).sort((a, b) => a.hp - b.hp)[0]; if (o) { u.cleaveUsado = true; golpeSec(B, u, o, evs, nome); } return; }
+  if (!cur.vivo || cur.saiu) return;
+  if (m === 'sap') { cur.conds.sap = true; evs.push({ t: 'cond', id: cur.id, cond: 'sap', on: true }); evs.push(msg(`${nome}: ${cur.nome} ataca com desvantagem.`)); }
+  else if (m === 'slow') { cur.conds.desacel = true; evs.push({ t: 'cond', id: cur.id, cond: 'desacel', on: true }); evs.push(msg(`${nome}: ${cur.nome} perde 10 pés de deslocamento.`)); }
+  else if (m === 'vex') { u.vex = { id: cur.id, n: 2 }; evs.push({ t: 'cond', id: cur.id, cond: 'vex', on: true }); evs.push(msg(`${nome}: vantagem no próximo ataque contra ${cur.nome}.`)); }
+  else if (m === 'topple') { const dc = 8 + u.modAtq - (u.arma.mag || 0); if (!salvar(B, cur, dc, 'CON', evs)) { cur.conds.caido = true; evs.push({ t: 'cond', id: cur.id, cond: 'caido', on: true }); evs.push(msg(`${nome}: ${cur.nome} cai no chão!`)); } else evs.push(msg(`${cur.nome} resiste a ${nome}.`)); }
+  else if (m === 'push') { if (['enorme', 'colossal'].includes(cur.tam)) { evs.push(msg(`${cur.nome} é grande demais para ser empurrado.`)); return; } empurrar(B, u, cur, 2, evs); evs.push(msg(`${nome}: ${cur.nome} é empurrado!`)); }
+}
+
 // ---------- ataque de monstro/aliado ----------
 function ataqueUnidade(B, u, a, alvo, evs, op = {}) {
-  const d = cheb(u, alvo); const { vant, desv } = vantDesv(B, u, alvo, d, { desv: op.desv }); const r = jogaD20(B, vant, desv); const crit = r === 20; const total = r + a.b + (u.conds.bencao ? 2 : 0);
+  const d = cheb(u, alvo); const { vant, desv } = vantDesv(B, u, alvo, d, { desv: op.desv }); if (u.conds.sap) u.conds.sap = false; const r = jogaD20(B, vant, desv); const crit = r === 20; const total = r + a.b + (u.conds.bencao ? 2 : 0) + bfSoma(u, 'atq') - (u.conds.maldito > 0 ? rolar('1d4', B.rng).total : 0);
   evs.push({ t: 'atq', de: u.id, para: alvo.id, tipo: d > 1 ? 'dist' : 'melee', arma: a.n });
+  if (alvo.imagens > 0 && espelhar(B, alvo, total, evs)) { evs.push({ t: 'erro', id: alvo.id, de: u.id, rolagem: r, total, nome: a.n }); return; }
   if (r !== 1 && (crit || total >= alvo.ca)) {
-    let dn = Math.round(rolar(a.d, B.rng, crit).total * (u.dm || 1)); if (u.conds.irritado) dn += 2;
+    let dn = Math.round(rolar(a.d, B.rng, crit).total * (u.dm || 1)); if (u.conds.irritado) dn += 2; dn += bfSoma(u, 'dano'); if (u.conds.enfraquecido > 0) dn = Math.floor(dn / 2);
     if (alvo.heroi && alvo.cls === 'ladino' && alvo.L >= 5 && !alvo.esq && alvo.reacao > 0) { alvo.esq = true; alvo.reacao--; dn = Math.floor(dn / 2); }
     dano(B, alvo, dn, a.t || 'fis', evs, crit, u); evs.push(msg(`${u.nome} acerta com ${a.n}${crit ? ' (CRÍTICO)' : ''}.`, u.eq === 'm' ? 'hurt' : 'hit'));
+    if (alvo.bf && d <= 1 && u.vivo) { const rf = Object.values(alvo.bf).find((b) => b.ef.refl); if (rf) { evs.push(msg('O escudo flamejante queima o atacante!')); dano(B, u, rolar(rf.ef.refl, B.rng).total, rf.ef.reflT || 'fogo', evs, false, alvo); } }
     if (alvo.vivo && alvo.heroi && !B.fim) { const esp = u.esp || {};
-      if (esp.veneno && !(alvo.cls === 'paladino' && alvo.L >= 3)) { const rs = d20(B.rng) + alvo.M.CON + (alvo.raca && alvo.raca.resVeneno ? 2 : 0); const dv = rolar(esp.veneno.d, B.rng).total; dano(B, alvo, rs >= esp.veneno.dc ? Math.floor(dv / 2) : dv, 'veneno', evs, false, u); }
-      if (!B.fim && esp.envenena && !(alvo.cls === 'paladino' && alvo.L >= 3)) { const rs = d20(B.rng) + alvo.M.CON; if (rs < esp.envenena.dc) { alvo.letargia = Math.min(5, alvo.letargia + 1); evs.push(msg('O veneno turva sua mira (−1 em ataques).')); } }
+      if (esp.veneno && !(alvo.cls === 'paladino' && alvo.L >= 3) && !bfLista(alvo, 'imuCond').includes('envenenado')) { const rs = d20(B.rng) + alvo.M.CON + (alvo.raca && alvo.raca.resVeneno ? 2 : 0); const dv = rolar(esp.veneno.d, B.rng).total; dano(B, alvo, rs >= esp.veneno.dc ? Math.floor(dv / 2) : dv, 'veneno', evs, false, u); }
+      if (!B.fim && esp.envenena && !(alvo.cls === 'paladino' && alvo.L >= 3) && !bfLista(alvo, 'imuCond').includes('envenenado')) { const rs = d20(B.rng) + alvo.M.CON; if (rs < esp.envenena.dc) { alvo.letargia = Math.min(5, alvo.letargia + 1); evs.push(msg('O veneno turva sua mira (−1 em ataques).')); } }
       if (!B.fim && esp.derruba && !alvo.derrubado) { const rs = d20(B.rng) + Math.max(alvo.M.FOR, alvo.M.DES); if (rs < esp.derruba.dc) { alvo.derrubado = true; evs.push(msg('Você é derrubado! Levantar custa metade do movimento.')); } }
       if (!B.fim && esp.agarra && !alvo.preso) { const rs = d20(B.rng) + Math.max(alvo.M.FOR, alvo.M.DES); if (rs < esp.agarra.dc) { alvo.preso = esp.agarra.dc; evs.push(msg('Você está agarrado! Escape para poder se mover.')); } }
       if (!B.fim && esp.paralisa) { const rs = d20(B.rng) + alvo.M.CON; if (rs < esp.paralisa.dc) { alvo.perdeTurno = true; evs.push(msg('Você fica paralisado!')); } }
@@ -189,9 +227,10 @@ export const GEO = {
   coluna_chamas: { f: 'circulo', alc: 8, raio: 1 }, cura_massa: { f: 'aliados', alc: 6, max: 6 }, cura_completa: { f: 'aliado', alc: 1 }, raio_solar: { f: 'linha', len: 8 }, tempestade_fogo: { f: 'circulo', alc: 9, raio: 3 }, cura_total: { f: 'aliados', alc: 8, max: 8 },
   encantar: { f: 'ponto', alc: 6 }, acalmar: { f: 'circulo', alc: 6, raio: 2 }, medo: { f: 'cone', len: 4 }, dominar: { f: 'ponto', alc: 6 },
 };
-export const geoDe = (id) => GEO[id] || { f: 'ponto', alc: 8 };
+export const geoDe = (id) => GEO[id] || (MAGIAS[id] && MAGIAS[id].geo) || { f: 'ponto', alc: 8 };
 function tilesCirculo(B, cx, cy, R) { const out = []; for (let y = Math.floor(cy - R - 1); y <= Math.ceil(cy + R + 1); y++) for (let x = Math.floor(cx - R - 1); x <= Math.ceil(cx + R + 1); x++) if (!B.g.solido(x, y) && eucl2(x, y, cx, cy) <= (R + 0.5) ** 2) out.push([x, y]); return out; }
 function tilesCone(B, u, tx, ty, len) { const vx = tx - u.x, vy = ty - u.y, vl = Math.hypot(vx, vy) || 1; const out = []; for (let y = u.y - len; y <= u.y + len; y++) for (let x = u.x - len; x <= u.x + len; x++) { if (x === u.x && y === u.y) continue; if (B.g.solido(x, y)) continue; const dx = x - u.x, dy = y - u.y, dl = Math.hypot(dx, dy); if (dl > len + 0.35) continue; if ((dx * vx + dy * vy) / (dl * vl) < 0.7) continue; if (!temLOS(B, u, { x, y })) continue; out.push([x, y]); } return out; }
+function tilesMuro(B, u, tx, ty, len) { const vx = tx - u.x, vy = ty - u.y, vl = Math.hypot(vx, vy) || 1; const px = -vy / vl, py = vx / vl; const out = [], vistos = new Set(); for (let t = -(len - 1) / 2; t <= (len - 1) / 2 + 0.01; t += 0.5) { const x = Math.round(tx + px * t), y = Math.round(ty + py * t); const k = K(x, y); if (vistos.has(k) || B.g.solido(x, y)) continue; vistos.add(k); out.push([x, y]); } return out; }
 function tilesLinha(B, u, tx, ty, len) { const vx = tx - u.x, vy = ty - u.y, vl = Math.hypot(vx, vy) || 1; const fx = Math.round(u.x + (vx / vl) * len), fy = Math.round(u.y + (vy / vl) * len); const t = linhaTiles(u.x, u.y, fx, fy); const out = []; for (let i = 1; i < t.length; i++) { if (B.g.solido(t[i][0], t[i][1])) break; out.push(t[i]); } return out; }
 // área afetada por uma magia mirada em (tx,ty): tiles e unidades
 export function areaMagia(B, u, id, tx, ty) {
@@ -201,14 +240,18 @@ export function areaMagia(B, u, id, tx, ty) {
   else if (g.f === 'linha') tiles = tilesLinha(B, u, tx, ty, g.len);
   else if (g.f === 'ponto' || g.f === 'aliado') tiles = [[tx, ty]];
   else if (g.f === 'cadeia') { const alvo = unidadeEm(B, tx, ty); tiles = [[tx, ty]]; if (alvo) { const vis = new Set([alvo.id]); let cur = alvo; for (let i = 0; i < g.saltos; i++) { const prox = inimigosDe(B, u).filter((e) => !vis.has(e.id) && cheb(e, cur) <= 4).sort((a, b) => cheb(a, cur) - cheb(b, cur))[0]; if (!prox) break; vis.add(prox.id); tiles.push([prox.x, prox.y]); cur = prox; } } }
+  else if (g.f === 'livre' || g.f === 'morto') tiles = [[tx, ty]];
+  else if (g.f === 'muro') tiles = tilesMuro(B, u, tx, ty, g.len);
   else if (g.f === 'aliados' || g.f === 'self') tiles = [];
-  const set = new Set(tiles.map(([x, y]) => K(x, y))); unid = B.un.filter((x) => x.vivo && !x.saiu && set.has(K(x.x, x.y)) && x !== u);
+  const set = new Set(tiles.map(([x, y]) => K(x, y))); unid = B.un.filter((x) => emCena(x) && set.has(K(x.x, x.y)) && x !== u);
   if (g.f === 'aliados') unid = [u, ...aliadosDe(B, u)].filter((x) => cheb(x, u) <= g.alc).sort((a, b) => a.hp / hpMaxEf(a) - b.hp / hpMaxEf(b)).slice(0, g.max);
   if (g.f === 'self') unid = [u];
   return { tiles, unidades: unid, geo: g };
 }
 export function mirasValidas(B, u, id) { // tiles onde se pode mirar a magia
   const g = geoDe(id), out = []; if (g.f === 'self' || g.f === 'aliados') return [{ x: u.x, y: u.y }];
+  if (g.f === 'livre' || g.f === 'muro') { const A = g.alc || 6; for (let y = u.y - A; y <= u.y + A; y++) for (let x = u.x - A; x <= u.x + A; x++) { if (B.g.solido(x, y) || (g.f === 'livre' && unidadeEm(B, x, y))) continue; if (!(x === u.x && y === u.y) && g.los !== false && !temLOS(B, u, { x, y })) continue; if (x === u.x && y === u.y) continue; out.push({ x, y }); } return out; }
+  if (g.f === 'morto') { for (const d of B.un) if (!d.vivo && d.eq === 'j' && !d.heroi && !d.invocado && cheb(d, u) <= (g.alc || 1) && !unidadeEm(B, d.x, d.y)) out.push({ x: d.x, y: d.y }); return out; }
   for (let y = u.y - (g.alc || g.len || 8); y <= u.y + (g.alc || g.len || 8); y++) for (let x = u.x - (g.alc || g.len || 8); x <= u.x + (g.alc || g.len || 8); x++) {
     if (B.g.solido(x, y)) continue; const d = Math.max(Math.abs(x - u.x), Math.abs(y - u.y)); if (g.f === 'cone' || g.f === 'linha') { if (d === 0 || d > (g.len || 8)) continue; out.push({ x, y }); continue; }
     if (d > (g.alc || 8)) continue; if (g.f === 'circulo') { if (temLOS(B, u, { x, y }) || d <= 1) out.push({ x, y }); continue; }
@@ -221,7 +264,7 @@ export function mirasValidas(B, u, id) { // tiles onde se pode mirar a magia
 export function magiasDoHeroi(B) {
   const H = B.h, out = [], maxNv = H.slots.length;
   for (const [id, m] of Object.entries(MAGIAS)) {
-    if (!m.cls.includes(H.cls)) continue; if (H.cls === 'paladino' && !['curar', 'bencao', 'favor'].includes(id)) continue;
+    if (!m.cls.includes(H.cls) || m.util) continue;
     if (m.nv === 0) { out.push({ id, ...m, circulos: [0], geo: geoDe(id) }); continue; }
     const circulos = []; for (let n = m.nv; n <= maxNv; n++) if (H.slots[n - 1] > 0) circulos.push(n);
     if (m.nv <= maxNv) out.push({ id, ...m, circulos, conhecida: true, geo: geoDe(id) });
@@ -234,31 +277,151 @@ function dadosEscalados(m, nv, L) {
 }
 const ehRacionalAlvo = (u) => u.racional || (u.tags || []).includes('humanoide');
 function salvar(B, alvo, dc, atr, evs, op = {}) { // retorna true se passou
-  let r = d20(B.rng); if (alvo.heroi) { const vant = (op.magico && alvo.raca && alvo.raca.vantMagia) || (op.medo && alvo.raca && alvo.raca.vantMedo) || (op.enc && alvo.raca && alvo.raca.vantEnc); if (vant) r = Math.max(r, d20(B.rng)); r += (alvo.M ? alvo.M[atr] : 0) + (alvo.conds.bencao ? 2 : 0); } else { if (op.magico && alvo.esp && alvo.esp.resMag) r = Math.max(r, d20(B.rng)); r += saveDe(alvo, atr) + (alvo.conds.bencao ? 2 : 0); } let ok = r >= dc; if (!ok && !alvo.heroi && alvo.esp && alvo.esp.resLend > 0) { alvo.esp.resLend--; ok = true; evs.push(msg(`${alvo.nome} usa Resistência Lendária!`, 'spell')); } return ok;
+  let vant = false;
+  if (alvo.heroi) vant = !!((op.magico && alvo.raca && alvo.raca.vantMagia) || (op.medo && alvo.raca && alvo.raca.vantMedo) || (op.enc && alvo.raca && alvo.raca.vantEnc));
+  else if (op.magico && alvo.esp && alvo.esp.resMag) vant = true;
+  if (bfTem(alvo, 'vantSalv')) vant = true;
+  let r = d20(B.rng); if (vant) r = Math.max(r, d20(B.rng));
+  r += (alvo.heroi ? (alvo.M ? alvo.M[atr] : 0) : saveDe(alvo, atr)) + (alvo.conds.bencao ? 2 : 0) + bfSoma(alvo, 'salv');
+  if (alvo.bf && alvo.bf.resis) { r += rolar('1d4', B.rng).total; removerBuff(B, alvo, 'resis', evs, true); }
+  if (alvo.conds.maldito > 0) r -= rolar('1d4', B.rng).total;
+  let ok = r >= dc; if (!ok && !alvo.heroi && alvo.esp && alvo.esp.resLend > 0) { alvo.esp.resLend--; ok = true; evs.push(msg(`${alvo.nome} usa Resistência Lendária!`, 'spell')); } return ok;
+}
+// ---------- magias de apoio: aplicar/remover efeitos, concentração, espelhos ----------
+const ROTULO_COND = { paralisado: 'paralisado', cego: 'cego', contido: 'preso', atordoado: 'atordoado', lento: 'lento', maldito: 'amaldiçoado', enfraquecido: 'enfraquecido', confuso: 'confuso', perde: 'sem ação', silenciado: 'silenciado', banido: 'banido', caido: 'caído', pacificado: 'pacificado', amedrontado: 'apavorado' };
+const COND_BOOL = ['lento', 'caido', 'sap', 'desacel'];
+function aplicarBuff(B, u, a, sp, nv, evs) {
+  const k = sp.buff; const ef = { ...(sp.ef || {}) }; a.bf = a.bf || {};
+  if (a.bf[k]) removerBuff(B, a, k, evs, true);
+  if (ef.smite) { const m = String(ef.smite).match(/^(\d+)d(\d+)$/); if (m) ef.smite = `${+m[1] + Math.max(0, nv - sp.nv)}d${m[2]}`; }
+  if (ef.imagens) a.imagens = ef.imagens;
+  a.bf[k] = { ef, de: u.id, nv, sp: sp.id, nome: sp.nome }; a.conds[k] = true;
+  if (ef.ca) a.ca += ef.ca;
+  if (ef.tmpHp) a.tmpHp = Math.max(a.tmpHp || 0, ef.tmpHp);
+  if (ef.acoes && a.heroi) a.acoes += ef.acoes;
+  if (u.conc && sp.conc) u.conc.itens.push({ a, k, tipo: 'bf' });
+  evs.push({ t: 'cond', id: a.id, cond: k, on: true, txt: sp.nome });
+}
+function removerBuff(B, a, k, evs, silencio) {
+  const b = a.bf && a.bf[k]; if (!b) return; if (b.ef.ca) a.ca -= b.ef.ca; if (b.ef.imagens) a.imagens = 0; if (b.ef.tmpHp) a.tmpHp = 0;
+  delete a.bf[k]; a.conds[k] = false; if (!silencio && evs) evs.push({ t: 'cond', id: a.id, cond: k, on: false });
+}
+function quebrarInvis(B, u, evs) { for (const k of Object.keys(u.bf || {})) if (u.bf[k].ef.quebra) { removerBuff(B, u, k, evs); evs.push(msg('Você reaparece ao atacar.')); } }
+function marcaRadiante(B, u, cur, evs, crit) { const b = u.bf && u.bf.marca_radiante; if (!b) return; removerBuff(B, u, 'marca_radiante', evs); evs.push(msg('Marca radiante explode!', 'spell')); evs.push({ t: 'fx', id: 'radiante', alvo: cur.id }); dano(B, cur, rolar(b.ef.smite, B.rng, crit).total, 'radiante', evs, !!crit, u); }
+function fimConc(B, u, evs) {
+  const c = u.conc; if (!c) return; u.conc = null;
+  for (const it of c.itens) {
+    if (it.tipo === 'bf') removerBuff(B, it.a, it.k, evs);
+    else if (it.tipo === 'cond') { if (it.a.conds[it.k]) { it.a.conds[it.k] = COND_BOOL.includes(it.k) ? false : 0; evs.push({ t: 'cond', id: it.a.id, cond: it.k, on: false }); } }
+    else if (it.tipo === 'invoc') { if (it.a.vivo && !it.a.saiu) { it.a.saiu = true; evs.push({ t: 'sai', id: it.a.id, como: 'dissipou' }); } }
+  }
+}
+function espelhar(B, alvo, total, evs) { // Imagem Espelhada: o ataque pode atingir uma ilusão em vez do alvo
+  const lim = alvo.imagens >= 3 ? 6 : alvo.imagens === 2 ? 8 : 11; if (d20(B.rng) < lim) return false;
+  evs.push(msg(`O ataque acerta uma imagem de ${alvo.nome}!`)); if (total >= 10 + (alvo.M ? alvo.M.DES : 0)) { alvo.imagens--; evs.push(msg('Uma imagem se desfaz.')); if (alvo.imagens <= 0) removerBuff(B, alvo, 'imagens', evs); } return true;
+}
+function contramagia(B, u, sp, evs) { // Contramágica preparada: anula a magia inimiga (reação)
+  const H = B.h; if (!bfTem(H, 'contra') || H.reacao <= 0) return false; const k = Object.keys(H.bf).find((q) => H.bf[q].ef.contra); const nvC = H.bf[k].nv; removerBuff(B, H, k, evs); H.reacao--;
+  const nvI = Math.max(1, Math.ceil((u.cr || 1) / 2)); if (nvC >= nvI || d20(B.rng) + H.modConj >= 10 + nvI) { evs.push(msg(`Contramágica! A magia de ${u.nome} se desfaz.`, 'spell')); evs.push({ t: 'fx', id: 'forca', alvo: u.id }); return true; }
+  evs.push(msg('A contramágica falha...')); return false;
+}
+function aplicarCond(B, u, a, cond, dur, evs, sp) {
+  if (bfLista(a, 'imuCond').includes(cond)) { evs.push(msg(`${a.nome} é imune a isso.`)); return false; }
+  if (a.chefe && ['paralisado', 'atordoado', 'banido', 'pacificado', 'perde', 'confuso'].includes(cond)) cond = 'lento';
+  if (COND_BOOL.includes(cond)) a.conds[cond] = true; else a.conds[cond] = (dur || 3) + 1;
+  evs.push({ t: 'cond', id: a.id, cond, on: true }); evs.push(msg(`${a.nome} fica ${ROTULO_COND[cond] || cond}!`));
+  if (u.conc && sp && sp.conc) u.conc.itens.push({ a, k: cond, tipo: 'cond' }); return true;
+}
+function aplicarProntos(B, h, evs) { // magias de apoio lançadas antes da luta (Grimório) entram em vigor
+  const pr = B.s && B.s.prontos; if (!pr) return; const j = B.un.filter((x) => x.eq === 'j');
+  for (const b of pr.buffs || []) { const sp = MAGIAS[b.id]; if (!sp) continue; const g = sp.geo || {}; const alvos = g.f === 'aliados' ? j : [h];
+    for (const a of alvos) { if (sp.ef) aplicarBuff(B, h, a, { ...sp, conc: 0 }, b.nv || sp.nv, evs); else { a.conds[sp.buff] = true; if (sp.ca) a.ca += sp.ca; if (sp.buff === 'armadura_mago') a.ca = Math.max(a.ca, 13 + ((a.M && a.M.DES) || 0)); if (sp.pv) { a.hpMax += sp.pv; a.hp += sp.pv; } } } }
+  if (pr.ward) { h.bf.contingencia = { ef: { ward: 1, wardF: pr.ward.f || 0.3 }, de: h.id, nv: 0, sp: 'pronto', nome: 'Salvaguarda' }; h.conds.contingencia = true; }
+  if (pr.alarme) h.ini += 5; if (pr.social) B.socialBonus = pr.social;
+  B.s.prontos = {};
+}
+function validarMagia(B, u, sp, tx, ty) {
+  if (sp.tipo === 'tele' && (B.g.solido(tx, ty) || unidadeEm(B, tx, ty))) return 'Destino bloqueado.';
+  if (sp.tipo === 'revive') { if (!B.un.some((x) => !x.vivo && x.eq === 'j' && !x.heroi && !x.invocado && x.x === tx && x.y === ty)) return 'Nenhum aliado caído nesse lugar.'; if (unidadeEm(B, tx, ty)) return 'Há alguém nesse lugar.'; }
+  if (sp.tipo === 'muro' && B.g.solido(tx, ty)) return 'Local inválido para o muro.';
+  return null;
 }
 export function conjurar(B, u, id, nv, tx, ty, evs = []) {
   const sp = MAGIAS[id]; nv = nv || sp.nv; const geo = geoDe(id); if (B.fim) return evs;
-  if (sp.nv > 0) { if (!(u.slots[nv - 1] > 0)) { evs.push(msg('Sem espaços de magia desse círculo!')); return evs; } u.slots[nv - 1]--; }
+  if (sp.util) { evs.push(msg('Essa magia só serve fora de combate (use o Grimório).')); return evs; }
+  const inval = validarMagia(B, u, sp, tx, ty); if (inval) { evs.push(msg(inval)); return evs; }
+  const gratis = !!(u.desejoLivre && sp.nv > 0 && sp.nv <= 8 && sp.tipo !== 'desejo');
+  if (sp.nv > 0) { if (gratis) { u.desejoLivre = false; evs.push(msg('O Desejo paga o espaço de magia!', 'spell')); } else { if (!(u.slots[nv - 1] > 0)) { evs.push(msg('Sem espaços de magia desse círculo!')); return evs; } u.slots[nv - 1]--; } }
+  if (sp.conc && u.heroi) { fimConc(B, u, evs); u.conc = { id, nome: sp.nome, itens: [] }; }
+  if (['atq', 'salva', 'auto', 'ctrl', 'sono'].includes(sp.tipo)) quebrarInvis(B, u, evs);
   const area = areaMagia(B, u, id, tx, ty); const bonusAv = u.cls === 'mago' && u.L >= 10 && ['salva', 'atq', 'auto'].includes(sp.tipo) && sp.nv > 0 ? u.M.INT : 0;
-  evs.push(msg(`Você conjura ${sp.nome}${sp.nv > 0 ? ` (${nv}º círculo)` : ''}!`, 'spell')); evs.push({ t: 'aoe', de: u.id, forma: geo.f, tiles: area.tiles, dano: sp.dano || (sp.tipo === 'cura' ? 'cura' : 'arcano'), alvo: [tx, ty], tx, ty });
+  evs.push(msg(`Você conjura ${sp.nome}${sp.nv > 0 ? ` (${nv}º círculo)` : ''}!`, 'spell')); evs.push({ t: 'aoe', de: u.id, forma: geo.f, tiles: area.tiles, dano: sp.dano || (sp.tipo === 'cura' ? 'cura' : 'arcano'), alvo: [tx, ty], tx, ty, mg: id, tp: sp.tipo, uni: area.unidades.map((x) => x.id), nv });
   const inim = area.unidades.filter((x) => x.eq !== u.eq), todos = area.unidades;
   if (sp.tipo === 'atq') { const alvo = unidadeEm(B, tx, ty); if (!alvo) return evs; const raios = sp.raios ? sp.raios + (nv - sp.nv) : 1; evs.push({ t: 'atq', de: u.id, para: alvo.id, tipo: 'magia', dano: sp.dano });
     for (let i = 0; i < raios && !B.fim && alvo.vivo; i++) { const { vant, desv } = vantDesv(B, u, alvo, cheb(u, alvo), { vant: u.conds.vant }); const r = jogaD20(B, vant, desv || u.exaust >= 3); const tot = r + u.atqMagia + (u.conds.bencao ? rolar('1d4', B.rng).total : 0) - u.letargia; const crit = r === 20;
+      if (alvo.imagens > 0 && espelhar(B, alvo, tot, evs)) { evs.push({ t: 'erro', id: alvo.id, de: u.id, rolagem: r, total: tot }); continue; }
       if (r !== 1 && (crit || tot >= alvo.ca)) { const d = rolar(dadosEscalados(sp, nv, u.L), B.rng, crit).total + bonusAv; dano(B, alvo, d, sp.dano, evs, crit, u); }
       else { evs.push({ t: 'erro', id: alvo.id, de: u.id, rolagem: r, total: tot }); if (sp.nv === 0 && u.cls === 'mago' && u.L >= 6 && r !== 1) dano(B, alvo, Math.floor(rolar(dadosEscalados(sp, nv, u.L), B.rng).total / 2), sp.dano, evs, false, u); } }
     if (sp.efeito === 'lento' && alvo.vivo) { alvo.conds.lento = true; evs.push({ t: 'cond', id: alvo.id, cond: 'lento', on: true }); } u.conds.vant = sp.efeito === 'guiado'; }
   else if (sp.tipo === 'salva') { const prim = unidadeEm(B, tx, ty); const lista = geo.f === 'ponto' ? (prim ? [prim] : []) : (geo.f === 'cadeia' ? area.tiles.map(([x, y]) => unidadeEm(B, x, y)).filter(Boolean) : inim);
     const alvos = geo.f === 'circulo' || geo.f === 'cone' || geo.f === 'linha' ? todos : lista; const rol = rolar(dadosEscalados(sp, nv, u.L), B.rng).total + bonusAv;
-    for (const a of alvos) { if (!a.vivo) continue; const passou = salvar(B, a, u.cd, sp.atr, evs); if (!passou) dano(B, a, rol, sp.dano, evs, false, u); else if (sp.metade) dano(B, a, Math.floor(rol / 2), sp.dano, evs, false, u); else evs.push(msg(`${a.nome} resiste à magia!`)); if (B.fim) break; } }
+    for (const a of alvos) { if (!a.vivo) continue; const passou = salvar(B, a, u.cd, sp.atr, evs); if (!passou) { dano(B, a, rol, sp.dano, evs, false, u); if (sp.cond && a.vivo) aplicarCond(B, u, a, sp.cond, sp.condDur || 1, evs, sp); } else if (sp.metade) dano(B, a, Math.floor(rol / 2), sp.dano, evs, false, u); else evs.push(msg(`${a.nome} resiste à magia!`)); if (B.fim) break; } }
   else if (sp.tipo === 'auto') { const alvo = unidadeEm(B, tx, ty); if (!alvo) return evs; const n = sp.dardos + (nv - sp.nv); let tot = 0; for (let i = 0; i < n; i++) tot += rolar(sp.dado, B.rng).total; dano(B, alvo, tot + bonusAv, sp.dano, evs, false, u); }
   else if (sp.tipo === 'cura') { const mult = (txt) => (txt.includes('d') ? rolar(dadosEscalados(sp, nv, u.L), B.rng).total + u.modConj : parseInt(txt)); const bonusCl = u.cls === 'clerigo' ? 2 + nv : 0;
-    const alvos = geo.f === 'aliados' ? area.unidades : [unidadeEm(B, tx, ty) || u]; for (const a of alvos) cura(B, a, Math.max(1, mult(sp.dado) + bonusCl), evs); }
-  else if (sp.tipo === 'sono') { let pool = rolar(dadosEscalados(sp, nv, u.L), B.rng).total; const alvos = area.unidades.filter((x) => !x.chefe).sort((a, b) => a.hp - b.hp); let dormiu = 0; for (const a of alvos) { if (a.hp <= pool) { pool -= a.hp; a.conds.dormindo = true; dormiu++; evs.push({ t: 'cond', id: a.id, cond: 'dormindo', on: true }); evs.push(msg(`${a.nome} adormece!`)); } } if (!dormiu) evs.push(msg('Ninguém adormece.')); }
-  else if (sp.tipo === 'buff') { const k = sp.buff; for (const a of (geo.f === 'aliados' ? area.unidades : [u])) { a.conds[k] = true; evs.push({ t: 'cond', id: a.id, cond: k, on: true }); } evs.push(msg(`${sp.nome} ativo até o fim do combate.`, 'spell')); }
+    const alvos = geo.f === 'aliados' ? area.unidades : [unidadeEm(B, tx, ty) || u]; for (const a of alvos) cura(B, a, sp.fixo ? rolar(sp.dado, B.rng).total : Math.max(1, mult(sp.dado) + bonusCl), evs); }
+  else if (sp.tipo === 'sono') { let pool = rolar(dadosEscalados(sp, nv, u.L), B.rng).total; const alvos = area.unidades.filter((x) => !x.chefe && x.eq !== u.eq).sort((a, b) => a.hp - b.hp); let dormiu = 0; const cd = sp.cond || 'dormindo';
+    for (const a of alvos) { if (a.hp <= pool) { pool -= a.hp; if (cd === 'dormindo') { a.conds.dormindo = true; evs.push({ t: 'cond', id: a.id, cond: 'dormindo', on: true }); evs.push(msg(`${a.nome} adormece!`)); dormiu++; } else if (aplicarCond(B, u, a, cd, 1, evs, sp)) dormiu++; } } if (!dormiu) evs.push(msg('Ninguém é afetado.')); }
+  else if (sp.tipo === 'buff') { const alvosB = geo.f === 'aliados' ? area.unidades : geo.f === 'aliado' ? [unidadeEm(B, tx, ty) || u] : [u];
+    if (sp.ef) { for (const a of alvosB) aplicarBuff(B, u, a, sp, nv, evs); evs.push(msg(`${sp.nome} em efeito${sp.conc ? ' (concentração)' : ''}.`, 'spell')); }
+    else { const k = sp.buff;
+      for (const a of alvosB) { const ja = a.conds[k]; a.conds[k] = true; evs.push({ t: 'cond', id: a.id, cond: k, on: true }); if (ja) continue;
+        if (sp.ca) a.ca += sp.ca; if (k === 'armadura_mago') a.ca = Math.max(a.ca, 13 + ((a.M && a.M.DES) || 0)); if (sp.pv) { a.hpMax += sp.pv; a.hp += sp.pv; } }
+      evs.push(msg(`${sp.nome} ativo até o fim do combate.`, 'spell')); } }
+  else if (sp.tipo === 'ctrl') { const prim = unidadeEm(B, tx, ty); const alvos = geo.f === 'ponto' ? (prim ? [prim] : []) : inim; let afetou = 0;
+    for (const a of alvos) { if (!a.vivo || a.eq === u.eq) continue;
+      if (sp.so === 'humanoide' && !ehRacionalAlvo(a)) { evs.push(msg(`${a.nome} não é afetado por ${sp.nome}.`)); continue; }
+      if (sp.so === 'racional' && !ehRacionalAlvo(a)) { evs.push(msg(`${a.nome} não entende o que você quer dele.`)); continue; }
+      if (sp.limite) { if (a.hp > sp.limite) { evs.push(msg(`${a.nome} tem vigor demais para a palavra de poder.`)); continue; } }
+      else if (sp.atr && salvar(B, a, u.cd, sp.atr, evs, { magico: true })) { evs.push(msg(`${a.nome} resiste a ${sp.nome}.`)); continue; }
+      let cond = sp.cond; if (sp.tiers) { const t = sp.tiers.find(([pv]) => a.hp <= pv); if (!t) { evs.push(msg(`${a.nome} aguenta a palavra divina!`)); continue; } cond = t[1]; }
+      if (cond === 'morre') { evs.push(msg(`${a.nome} cai morto!`, 'crit')); a.hp = 1; dano(B, a, 999, 'radiante', evs, false, u); afetou++; if (B.fim) break; continue; }
+      if (aplicarCond(B, u, a, cond, sp.dur || 3, evs, sp)) afetou++; if (sp.empurra && a.vivo) empurrar(B, u, a, sp.empurra, evs); if (B.fim) break; }
+    if (!afetou && !alvos.length) evs.push(msg('Nenhum alvo no ponto.')); }
   else if (sp.tipo === 'matar') { const alvo = unidadeEm(B, tx, ty); if (alvo) { if (alvo.hp <= sp.limite) { alvo.hp = 1; dano(B, alvo, 999, 'necrótico', evs, false, u); } else evs.push(msg(`${alvo.nome} aguenta a palavra de poder!`)); } }
   else if (sp.tipo === 'encanto') { const alvo = unidadeEm(B, tx, ty); if (alvo) magiaEncanto(B, u, alvo, id, evs); }
   else if (sp.tipo === 'acalmar') { for (const a of area.unidades) { if (a.chefe && a.cr > u.L + 2) { evs.push(msg(`${a.nome} ignora a calma.`)); continue; } if (salvar(B, a, u.cd, 'CAR', evs, { magico: true })) { evs.push(msg(`${a.nome} resiste à calma.`)); continue; } a.conds.pacificado = 3; a.atitude = Math.max(a.atitude, 35); evs.push({ t: 'cond', id: a.id, cond: 'pacificado', on: true }); evs.push(msg(`${a.nome} se acalma e baixa as armas.`)); } }
   else if (sp.tipo === 'medo') { for (const a of inim) { if (!a.vivo) continue; if (salvar(B, a, u.cd, 'SAB', evs, { magico: true })) { evs.push(msg(`${a.nome} resiste ao medo.`)); continue; } a.conds.amedrontado = 3; evs.push({ t: 'cond', id: a.id, cond: 'amedrontado', on: true }); evs.push(msg(`${a.nome} foge aterrorizado!`)); } }
+  else if (sp.tipo === 'invoca') {
+    const [eh, ed] = escalaNivel(u.L || 1); const n = Math.min(6, (sp.n || 1) + (sp.mais ? Math.max(0, nv - sp.nv) * sp.mais : 0)); let feitos = 0;
+    for (let i = 0; i < n; i++) {
+      const p = livreProximo(B, tx, ty, 2 + i); if (B.g.solido(p.x, p.y) || unidadeEm(B, p.x, p.y)) continue;
+      const m = criarMonstro(sp.mon, { esc: Math.max(0.6, eh * 0.9), ov: { dm: ed * 0.7 } });
+      if (sp.hp) m.hp = m.hpMax = sp.hp; if (sp.isca) { m.atq = []; m.esp = {}; m.tags = [...(m.tags || []), 'ilusao']; } if (sp.dano) m.atq = [{ n: 'Espada Arcana', b: u.atqMagia, d: sp.dano, t: 'força', alc: 1 }]; if (sp.clone) m.n = `${u.nome} (Duplicata)`;
+      const nid = 'v' + (B.nInv = (B.nInv || 0) + 1); const un = unidadeMonstro(m, 'j', nid, p, B.rng); un.aliadoFixo = true; un.invocado = true; un.isca = !!sp.isca; un.dur = sp.dur === undefined ? null : sp.dur; un.ini = u.ini; un.saveBonus = 2 + Math.floor((u.L || 1) / 3);
+      B.un.push(un); B.ordem.splice(Math.min(B.ordem.length, B.i + 1), 0, nid); evs.push({ t: 'invoca', id: nid, u: un }); feitos++; if (u.conc && sp.conc) u.conc.itens.push({ a: un, tipo: 'invoc' });
+    }
+    evs.push(msg(feitos ? `${sp.nome}: ${feitos} ${feitos > 1 ? 'criaturas surgem' : 'criatura surge'} ao seu lado!` : 'Não há espaço para invocar.', 'spell')); }
+  else if (sp.tipo === 'tele') { u.x = tx; u.y = ty; evs.push({ t: 'mov', id: u.id, caminho: [[tx, ty]], tele: true }); evs.push(msg('Você desaparece e reaparece em outro lugar!', 'spell')); }
+  else if (sp.tipo === 'limpa') { const a = unidadeEm(B, tx, ty) || u; let n = 0;
+    for (const k of (sp.maldicao ? ['maldito'] : CONDS_NEG)) if (a.conds[k]) { a.conds[k] = COND_BOOL.includes(k) ? false : 0; evs.push({ t: 'cond', id: a.id, cond: k, on: false }); n++; }
+    if (a.letargia) { a.letargia = 0; n++; } if (a.perdeTurno) { a.perdeTurno = false; n++; } if (a.preso) { a.preso = 0; n++; } if (a.derrubado) { a.derrubado = false; n++; }
+    if (sp.tudo) { if (a.hpMaxMod) { a.hpMaxMod = 0; n++; } if (a.exaust > 0) { a.exaust--; n++; } }
+    evs.push({ t: 'fx', id: 'cura_azul', alvo: a.id }); evs.push(msg(n ? `${a.nome} é purificado.` : 'Nada a remover.', 'heal')); }
+  else if (sp.tipo === 'revive') { const a = B.un.find((x) => !x.vivo && x.eq === 'j' && !x.heroi && !x.invocado && x.x === tx && x.y === ty); if (a) { a.vivo = true; a.saiu = false; a.conds = {}; a.bf = {}; a.hp = sp.hpF ? Math.max(1, Math.floor(a.hpMax * sp.hpF)) : (sp.hp || 1); evs.push({ t: 'revive', id: a.id }); evs.push(msg(`${a.nome} volta à vida!`, 'heal')); } }
+  else if (sp.tipo === 'muro') { let n = 0; for (const [x, y] of area.tiles) { if (B.g.solido(x, y) || unidadeEm(B, x, y)) continue; B.paredes.set(K(x, y), { exp: sp.dur ? B.rodada + sp.dur : null, tipo: sp.mur || 'forca' }); n++; } evs.push({ t: 'muro' }); evs.push(msg(n ? `Um muro surge: ${n} casas bloqueadas.` : 'Não há onde erguer o muro.', 'spell')); }
+  else if (sp.tipo === 'dispel') {
+    for (const a of area.unidades) {
+      if (a.eq !== u.eq) { for (const k of Object.keys(a.bf || {})) removerBuff(B, a, k, evs); for (const k of CONDS_POS) if (a.conds[k]) { a.conds[k] = false; evs.push({ t: 'cond', id: a.id, cond: k, on: false }); } if (a.invocado) { a.saiu = true; evs.push({ t: 'sai', id: a.id, como: 'dissipou' }); } }
+      else for (const k of CONDS_NEG) if (a.conds[k]) { a.conds[k] = COND_BOOL.includes(k) ? false : 0; evs.push({ t: 'cond', id: a.id, cond: k, on: false }); }
+      if (sp.banirTags && a.eq !== u.eq && ((a.tags || []).some((t) => sp.banirTags.includes(t)) || (a.mono && sp.banirTags.includes(a.mono.tp)))) { if (a.chefe) evs.push(msg(`${a.nome} resiste ao banimento!`)); else if (!salvar(B, a, u.cd, 'CAR', evs, { magico: true })) { sair(B, a, 'banido', evs); evs.push(msg(`${a.nome} é banido deste plano!`, 'crit')); } else evs.push(msg(`${a.nome} resiste ao banimento.`)); }
+    } evs.push(msg('Magias dissipadas na área.', 'spell')); }
+  else if (sp.tipo === 'banir') { const a = unidadeEm(B, tx, ty);
+    if (!a || a.eq === u.eq) evs.push(msg('Nenhum alvo.')); else if (a.chefe) { evs.push(msg(`${a.nome} é poderoso demais para ser banido!`)); a.conds.lento = true; evs.push({ t: 'cond', id: a.id, cond: 'lento', on: true }); }
+    else if (salvar(B, a, u.cd, sp.atr || 'CAR', evs, { magico: true })) evs.push(msg(`${a.nome} resiste ao banimento.`)); else { sair(B, a, 'banido', evs); evs.push(msg(`${a.nome} é banido do combate!`, 'crit')); } }
+  else if (sp.tipo === 'dominar') { const a = unidadeEm(B, tx, ty);
+    if (!a || a.eq === u.eq) evs.push(msg('Nenhum alvo.')); else if (sp.so === 'fera' && !(a.tags || []).includes('fera')) evs.push(msg(`${sp.nome} só afeta feras.`)); else if (a.chefe) evs.push(msg(`${a.nome} tem vontade forte demais para ser dominado!`));
+    else if (salvar(B, a, u.cd, sp.atr || 'SAB', evs, { magico: true })) { evs.push(msg(`${a.nome} resiste à dominação e fica furioso!`)); a.conds.irritado = true; } else { converter(B, a, evs, 'dominado'); a.conds.convertidoTmp = 0; } }
+  else if (sp.tipo === 'desejo') { u.desejoLivre = true; u.acoes += 1; evs.push(msg('DESEJO! Sua próxima magia (até o 8º círculo) não gasta espaço de magia, e você ganha uma ação extra.', 'spell')); evs.push({ t: 'fx', id: 'radiante', alvo: u.id, tiles: 3 }); }
   return evs;
 }
 function magiaEncanto(B, u, alvo, id, evs) {
@@ -303,7 +466,7 @@ export function agir(B, cmd) {
     if (H.acoes <= 0 || !alvo || !alvo.vivo || alvo.eq === 'j') return evs; if (cheb(H, alvo) > alcanceArma(H) || (alcanceArma(H) > 1 && !temLOS(B, H, alvo))) { evs.push(msg('Fora de alcance.')); return evs; }
     gasta('acao'); ataqueHeroi(B, H, alvo, evs, { smite: id.startsWith('smite') ? parseInt(id.slice(5)) : 0, sorte: H.conds.sortePronta }); H.conds.sortePronta = false;
   } else if (id === 'magia') {
-    const sp = MAGIAS[cmd.magia]; if (!sp) return evs; if (sp.bonus) { if (H.bonus <= 0) return evs; gasta('bonus'); } else { if (H.acoes <= 0) return evs; gasta('acao'); } conjurar(B, H, cmd.magia, cmd.nv, cmd.x, cmd.y, evs);
+    const sp = MAGIAS[cmd.magia]; if (!sp || sp.util) return evs; if (sp.bonus) { if (H.bonus <= 0) return evs; gasta('bonus'); } else { if (H.acoes <= 0) return evs; gasta('acao'); } conjurar(B, H, cmd.magia, cmd.nv, cmd.x, cmd.y, evs);
   } else if (id === 'item') { if (H.acoes <= 0) return evs; if (usarItem(B, H, cmd.idx, alvo, evs, cmd)) gasta('acao'); }
   else if (id === 'folego') { if (H.bonus <= 0 || H.cont.folego <= 0) return evs; gasta('bonus'); H.cont.folego--; evs.push(msg('Você retoma o fôlego!', 'heal')); cura(B, H, rolar('1d10', B.rng).total + H.L, evs); }
   else if (id === 'surto') { if (H.cont.surto <= 0) return evs; H.cont.surto--; H.acoes += 1; evs.push(msg('Surto de Ação! Você ganha uma ação extra.', 'spell')); }
@@ -365,7 +528,8 @@ export function conversar(B, alvo, opcId, op2 = {}) {
     else if ((B.s.heroi.ouro || 0) < op.custo) { evs.push(msg('Você não tem ouro suficiente.')); if (!livre) H.acoes++; return { evs, res: 'nada' }; }
     else { B.s.heroi.ouro -= op.custo; B.subornou = (B.subornou || 0) + op.custo; evs.push(falaDe(alvo, 'suborno', B)); sair(B, alvo, 'subornado', evs); res = 'saiu'; }
   } else {
-    const r = d20(B.rng); const tot = r + op.mod; const crit = r === 20; const ok = crit || (r !== 1 && tot >= op.dc);
+    let bonusG = B.socialBonus || 0; if (H.bf && H.bf.guia) { bonusG += rolar('1d4', B.rng).total; removerBuff(B, H, 'guia', evs, true); }
+    const r = d20(B.rng); const tot = r + op.mod + bonusG; const crit = r === 20; const ok = crit || (r !== 1 && tot >= op.dc);
     evs.push({ t: 'teste', alvo: alvo.id, rolagem: r, total: tot, dc: op.dc, ok, tipo: opcId });
     if (ok) {
       if (opcId === 'persuadir') {
@@ -386,10 +550,12 @@ function sair(B, u, como, evs) { u.saiu = true; B.baixas.push({ id: u.id, nome: 
 
 // ---------- turnos ----------
 function iniciaTurno(B, u, evs) {
-  u.acoes = 1; u.bonus = 1; u.reacao = 1; u.movRest = Math.max(1, (u.vel || 6) - (u.conds.lento ? Math.floor(u.vel / 2) : 0)); if (u.heroi) { if (u.derrubado) { u.derrubado = false; u.movRest = Math.max(1, Math.floor(u.movRest / 2)); } if (u.preso) { const rs = d20(B.rng) + Math.max(u.M.FOR, u.M.DES); if (rs >= u.preso) { u.preso = 0; evs.push(msg('Você se desvencilha!')); } else { u.movRest = 0; evs.push(msg('Você continua agarrado.')); } } } u.desengajou = false; u.furtivoUsado = false; u.conds.descuidadoAtivo = false; u.esq = false;
-  if (u.heroi) { if (u.regen && u.hp < hpMaxEf(u)) cura(B, u, Math.min(u.regen, hpMaxEf(u) - u.hp), evs); u.conds.esquivando = false; if (u.conds.descuidado) u.conds.descuidado = false;
+  for (const k of Object.keys(u.bf || {})) if (u.bf[k].ef.tmp1) removerBuff(B, u, k, evs);
+  if (u.invocado && u.dur !== null && u.dur !== undefined) { if (u.dur <= 0) { u.saiu = true; evs.push({ t: 'sai', id: u.id, como: 'dissipou' }); evs.push(msg(`${u.nome} se dissipa.`)); return; } u.dur--; }
+  u.acoes = 1; u.bonus = 1; u.reacao = 1; u.movRest = Math.max(1, (u.vel || 6) - (u.conds.lento ? Math.floor(u.vel / 2) : 0)) + bfSoma(u, 'vel'); if (u.conds.acelerado) { u.acoes = 2; u.movRest *= 2; } if (u.conds.contido) u.movRest = 0; if (u.conds.desacel) u.movRest = Math.max(1, u.movRest - 2); if (u.conds.caido) { u.conds.caido = false; u.movRest = Math.max(1, Math.floor(u.movRest / 2)); evs.push({ t: 'cond', id: u.id, cond: 'caido', on: false }); evs.push(msg(`${u.nome} se levanta.`)); } if (u.heroi) { if (u.derrubado) { u.derrubado = false; u.movRest = Math.max(1, Math.floor(u.movRest / 2)); } if (u.preso) { const rs = d20(B.rng) + Math.max(u.M.FOR, u.M.DES); if (rs >= u.preso) { u.preso = 0; evs.push(msg('Você se desvencilha!')); } else { u.movRest = 0; evs.push(msg('Você continua agarrado.')); } } } u.desengajou = false; u.furtivoUsado = false; u.conds.descuidadoAtivo = false; u.esq = false;
+  if (u.heroi) { u.cleaveUsado = false; u.nickUsado = false; if (u.vex && --u.vex.n <= 0) u.vex = null; for (const e of B.un) if (e.eq !== u.eq) { e.conds.sap = false; e.conds.desacel = false; } if (u.regen && u.hp < hpMaxEf(u)) cura(B, u, Math.min(u.regen, hpMaxEf(u) - u.hp), evs); u.conds.esquivando = false; if (u.conds.descuidado) u.conds.descuidado = false;
     if (u.conds.armaEsp && !B.fim) { const alvo = inimigosDe(B, u).filter((e) => cheb(e, u) <= 6 && temLOS(B, u, e)).sort((a, b) => cheb(a, u) - cheb(b, u))[0]; if (alvo) { const r = d20(B.rng); if (r + u.atqMagia >= alvo.ca || r === 20) { evs.push(msg('A Arma Espiritual golpeia!', 'hit')); dano(B, alvo, rolar(`1d8+${u.modConj}`, B.rng, r === 20).total, 'força', evs, r === 20, u); } else evs.push(msg('A Arma Espiritual erra.', 'miss')); } } }
-  else { u.conds.esquivando = false; for (const k of ['pacificado', 'amedrontado']) if (u.conds[k] > 0) { u.conds[k]--; if (!u.conds[k]) evs.push({ t: 'cond', id: u.id, cond: k, on: false }); } }
+  else { u.conds.esquivando = false; for (const k of ['pacificado', 'amedrontado', 'paralisado', 'atordoado', 'contido', 'cego', 'maldito', 'enfraquecido', 'confuso', 'silenciado', 'banido']) if (u.conds[k] > 0) { u.conds[k]--; if (!u.conds[k]) { evs.push({ t: 'cond', id: u.id, cond: k, on: false }); if (k === 'banido') { const q = livreProximo(B, u.x, u.y, 4); u.x = q.x; u.y = q.y; evs.push(msg(`${u.nome} reaparece!`)); } } } }
 }
 // avança a ordem de iniciativa até o próximo turno do herói (ou fim do combate)
 export function avancar(B, evs = []) {
@@ -404,16 +570,18 @@ export function avancar(B, evs = []) {
   }
   return evs;
 }
-function passaVez(B) { B.i++; if (B.i >= B.ordem.length) { B.i = 0; B.rodada++; for (const u of B.un) if (u.vivo && u.eq === 'm' && u.esp && u.esp.sopro && !u.sopro && !(u.tags || []).includes('humanoide') && B.rng() < 0.33) u.sopro = true; } B.turnoIniciado = null; }
+function passaVez(B) { B.i++; if (B.i >= B.ordem.length) { B.i = 0; B.rodada++; for (const [k, w] of B.paredes) if (w.exp !== null && w.exp <= B.rodada) B.paredes.delete(k); for (const u of B.un) if (u.vivo && u.eq === 'm' && u.esp && u.esp.sopro && !u.sopro && !(u.tags || []).includes('humanoide') && B.rng() < 0.33) u.sopro = true; } B.turnoIniciado = null; }
 export function fimTurno(B) { const evs = []; if (B.fim || ativo(B) !== B.h) return evs; passaVez(B); avancar(B, evs); return evs; }
 
 // ---------- IA de monstros e aliados ----------
 function pontuaAlvo(B, u, e) { let s = -cheb(u, e) * 2; if (e.heroi) s += 2; s += (1 - e.hp / hpMaxEf(e)) * 3; if (incapaz(e)) s += 1; return s; }
 function turnoIA(B, u, evs) {
-  const esp = u.esp || {};
+  const esp = u.esp || {}; if (u.saiu || !u.vivo || u.conds.banido > 0 || u.isca) return;
   if (u.conds.surpreso) { u.conds.surpreso = false; evs.push(msg(`${u.nome} foi pego de surpresa.`)); return; }
   if (u.conds.dormindo) { evs.push(msg(`${u.nome} dorme.`)); return; }
+  if (u.conds.paralisado > 0 || u.conds.atordoado > 0) { evs.push(msg(`${u.nome} está ${u.conds.atordoado > 0 ? 'atordoado' : 'paralisado'} e não age.`)); return; }
   if (u.conds.perde > 0) { u.conds.perde--; evs.push(msg(`${u.nome} perde o turno.`)); return; }
+  if (u.conds.confuso > 0) { const rc = Math.ceil(B.rng() * 10); if (rc <= 6) { evs.push(msg(`${u.nome} está confuso e não age.`)); return; } if (rc <= 8) { const perto = B.un.filter((x) => emCena(x) && x !== u && cheb(x, u) <= (u.atq[0] ? u.atq[0].alc : 1)).sort((a, b) => cheb(a, u) - cheb(b, u))[0]; evs.push(msg(`${u.nome}, confuso, ataca quem estiver perto!`)); if (perto && u.atq[0]) ataqueUnidade(B, u, u.atq[0], perto, evs); return; } }
   u.rodada++;
   if (esp.regen && u.hp < u.hpMax && !u.queimou) { const n = Math.min(esp.regen, u.hpMax - u.hp); u.hp += n; evs.push({ t: 'cura', id: u.id, n }); } u.queimou = false;
   const H = B.h;
@@ -435,6 +603,7 @@ function turnoIA(B, u, evs) {
   const alc = dist ? Math.max(...u.atq.map((a) => a.alc)) : 1;
   // escolhe alvo
   let alvo = alvos.slice().sort((a, b) => pontuaAlvo(B, u, b) - pontuaAlvo(B, u, a))[0]; if (u.eq === 'm' && u.rodada === 1 && B.rng() < 0.5) alvo = H;
+  if (u.eq === 'm') { const iscas = alvos.filter((x) => x.isca); if (iscas.length && B.rng() < 0.55) alvo = iscas.sort((a, b) => cheb(a, u) - cheb(b, u))[0]; }
   const cadaAtq = () => u.atq.filter((a) => cheb(u, alvo) <= a.alc && (a.alc === 1 || temLOS(B, u, alvo)));
   // mover
   if (cadaAtq().length === 0) irAte(B, u, alvo, alc, dist, evs);
@@ -467,9 +636,10 @@ function fugirDe(B, u, evs) {
   else evs.push(msg(`${u.nome} recua com medo.`));
 }
 function sopro(B, u, alvos, evs) {
-  const sp = u.esp.sopro; const alvo = alvos.slice().sort((a, b) => pontuaAlvo(B, u, b) - pontuaAlvo(B, u, a))[0]; const forma = sp.forma || (/bola/i.test(sp.n) ? 'bola' : 'cone'); const bola = forma === 'bola'; const len = sp.tam ? Math.min(6, Math.max(3, Math.round(sp.tam * 0.7))) : (u.cr >= 10 ? 5 : 4); const raio = sp.tam ? Math.max(1, Math.round(sp.tam / 2)) : 2;
+  const sp = u.esp.sopro; if (u.conds.silenciado > 0 && /bola|raio|magia|rajada/i.test(sp.n || '')) return false; const alvo = alvos.slice().sort((a, b) => pontuaAlvo(B, u, b) - pontuaAlvo(B, u, a))[0]; const forma = sp.forma || (/bola/i.test(sp.n) ? 'bola' : 'cone'); const bola = forma === 'bola'; const len = sp.tam ? Math.min(6, Math.max(3, Math.round(sp.tam * 0.7))) : (u.cr >= 10 ? 5 : 4); const raio = sp.tam ? Math.max(1, Math.round(sp.tam / 2)) : 2;
   let area; if (bola) { if (cheb(u, alvo) > 8) return false; area = { tiles: tilesCirculo(B, alvo.x, alvo.y, raio), tx: alvo.x, ty: alvo.y }; } else if (forma === 'linha') { if (cheb(u, alvo) > len + 1) return false; area = { tiles: tilesLinha(B, u, alvo.x, alvo.y, len), tx: alvo.x, ty: alvo.y }; } else { if (cheb(u, alvo) > len + 1) return false; area = { tiles: tilesCone(B, u, alvo.x, alvo.y, len), tx: alvo.x, ty: alvo.y }; }
   const set = new Set(area.tiles.map(([x, y]) => K(x, y))); const atingidos = B.un.filter((x) => x.vivo && !x.saiu && x !== u && set.has(K(x.x, x.y))); if (!atingidos.some((x) => x.eq !== u.eq)) return false;
+  if (bola && contramagia(B, u, sp, evs)) return true;
   evs.push(msg(`${u.nome} usa ${sp.n}!`, 'spell')); evs.push({ t: 'aoe', de: u.id, forma: bola ? 'circulo' : forma === 'linha' ? 'linha' : 'cone', tiles: area.tiles, dano: sp.t, tx: area.tx, ty: area.ty });
   const rol = Math.round(rolar(sp.d, B.rng).total * (u.dm || 1));
   for (const a of atingidos) { if (a.eq === u.eq) continue; const evasao = a.heroi && a.cls === 'ladino' && a.L >= 7 && sp.atr === 'DES'; const passou = salvar(B, a, sp.dc, sp.atr, evs, { magico: bola }); dano(B, a, evasao ? (passou ? 0 : Math.floor(rol / 2)) : passou ? (sp.meio === false ? 0 : Math.floor(rol / 2)) : rol, sp.t, evs, false, u); if (B.fim) break; }
@@ -496,6 +666,7 @@ export function iaHeroi(B) { // devolve a próxima ação (ou null para encerrar
   if (H.acoes <= 0) return null;
   if (H.cls === 'clerigo' || H.cls === 'mago') {
     if (H.cls === 'clerigo') { const fer = [H, ...aliadosDe(B, H)].filter((a) => a.hp < hpMaxEf(a) * 0.45).sort((a, b) => a.hp / hpMaxEf(a) - b.hp / hpMaxEf(b))[0]; if (fer) { const cur = mags.filter((x) => x.tipo === 'cura' && x.circulos.length && !x.bonus && x.geo.f === 'aliado').sort((a, b) => b.nv - a.nv)[0]; if (cur && cheb(fer, H) <= 1) return { id: 'magia', magia: cur.id, nv: cur.circulos[0], x: fer.x, y: fer.y }; } }
+    if (!B.un.some((q) => q.invocado && q.vivo && !q.saiu) && (alvoPerto.hp > 25 || B.chefe)) { const iv = mags.filter((x) => x.tipo === 'invoca' && x.mon && !x.isca && !['s_mage_hand', 's_owl', 's_mastiff'].includes(x.mon) && x.circulos.length).sort((a, b) => b.nv - a.nv)[0]; if (iv) return { id: 'magia', magia: iv.id, nv: iv.circulos[0], x: H.x, y: H.y }; }
     if (H.cls === 'clerigo') { const g = mags.find((x) => x.id === 'guardioes' && x.circulos.length); if (g && !H.conds.guardioes && (alvoPerto.hp > 25 || B.chefe)) return { id: 'magia', magia: 'guardioes', nv: g.circulos[0], x: H.x, y: H.y }; const a = mags.find((x) => x.id === 'arma_esp' && x.circulos.length); if (a && !H.conds.armaEsp && H.bonus > 0 && (alvoPerto.hp > 25 || B.chefe)) return { id: 'magia', magia: 'arma_esp', nv: a.circulos[0], x: H.x, y: H.y }; }
     const dmg = mags.filter((x) => ['salva', 'atq', 'auto'].includes(x.tipo) && x.nv > 0 && x.circulos.length).sort((a, b) => b.nv - a.nv);
     for (const sp of dmg) { if (!(alvoPerto.hp > 18 || B.chefe || inim.length > 1)) break; if (sp.geo.f === 'circulo' || sp.geo.f === 'cone' || sp.geo.f === 'linha') { const m = melhorCirculo(B, H, sp.id); if (m && m.s >= 1.8) return { id: 'magia', magia: sp.id, nv: sp.circulos[0], x: m.x, y: m.y }; } else { const alvo = inim.filter((e) => cheb(e, H) <= sp.geo.alc && temLOS(B, H, e)).sort((a, b) => b.hp - a.hp)[0]; if (alvo) return { id: 'magia', magia: sp.id, nv: sp.circulos[0], x: alvo.x, y: alvo.y }; } }

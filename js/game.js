@@ -2,20 +2,27 @@
 import { CLASSES, ITENS, MONSTROS } from './srd.js';
 import { CAPITULOS, NPCS } from './story.js';
 import * as St from './store.js';
-import { nReliquias } from './campanha.js';
+import { nReliquias, ativas as questsAtivas, progressoQuest } from './campanha.js';
 import * as R from './rules.js';
 import * as Tt from './tatico.js';
 import { gerarMasmorra, visiveis, T } from './dungeon.js';
-import { criarVila, criarVale, solidoEm, bausDoDia, PREDIOS } from './world.js';
+import { obterMapa, solidoEm, bausDoDia, DESTINOS_VIAGEM } from './world.js';
+import './pessoas.js';
+import { interagirObjeto } from './interacoes.js';
 import * as Au from './audio.js';
 import * as Rn from './render.js';
 import * as Ba from './batalha.js';
 import { spriteObjeto } from './arte.js';
 import { retrato, spritePessoa } from './pessoa.js';
 import { spriteMonstro } from './monstros.js';
-import { NPC_PERFIL, AFIN_RECOMPENSAS } from './personalidade.js';
+import { NPC_PERFIL } from './personalidade.js';
+import { conversar, visitaPendente, visitaDoRei, sonho, dadiva, teo } from './conversa.js';
+import { QLUG } from './historia2.js';
+import { LUG } from './mundo.js';
+import { apPadrao } from './cosmeticos.js';
 import { criarGrupo, tamanhoGrupo, comPerfil } from './encontros.js';
 import { texto } from './gfx.js';
+import { passoVida, ambiente, Vida, vidaAtual } from './vida.js';
 
 const TS = Rn.TS;
 const DIRV = { cima: [0, -1], baixo: [0, 1], esq: [-1, 0], dir: [1, 0] };
@@ -26,7 +33,8 @@ const rnd = (n) => Math.floor(Math.random() * n);
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
 export const G = { modo: 'titulo', ui: null, ocupado: false, D: null, mapa: null };
-let canvas, ultimoT = 0, tempo = 0, stepCool = 6, vila, vale, mapa, npcs = [], D = null, cenaBat = 'vale';
+let visitaT = 0, canvas, ultimoT = 0, tempo = 0, stepCool = 6, mapa, npcs = [], D = null, cenaBat = 'vale';
+const NOME_PAINEL = { forja: 'Forja da Brasa', arena: 'Arena de Ferro', templo: 'Templo', biblioteca: 'Biblioteca', taverna: 'Taverna', alquimista: 'Alquimia', mercador: 'Empório', trilha: 'Pavilhão da Trilha' };
 const P = { x: 14, y: 26, dir: 'baixo', mov: null, passo: 0 };
 G.P = P;
 const fade = { a: 0, alvo: 0, res: null };
@@ -35,8 +43,8 @@ const flut = []; // textos flutuantes de exploração
 
 // ---------- inicialização ----------
 export function iniciarJogo(cv) {
-  canvas = cv; Rn.iniciarVista(canvas); vila = criarVila(); vale = criarVale(); G.vila = vila; G.vale = vale; instalarEntrada();
-  trocarMapaSemFade('vila', vila.spawn); G.modo = 'titulo'; requestAnimationFrame(loop);
+  canvas = cv; Rn.iniciarVista(canvas); instalarEntrada();
+  trocarMapaSemFade('vila', null); G.modo = 'titulo'; requestAnimationFrame(loop);
   const salvar = () => { try { salvarRun(); if (St.S) St.salvar(); } catch (e) { /* ignorado */ } };
   window.addEventListener('pagehide', salvar); document.addEventListener('visibilitychange', () => { if (document.hidden) salvar(); else G.verificarDia(); });
   setInterval(() => G.verificarDia(), 30000);
@@ -48,9 +56,18 @@ G.verificarDia = () => {
 G.comecar = async (novo) => {
   Au.destravar(); G.ocupado = false;
   if (!novo && S().run) { const ok = await G.ui.confirmar('Masmorra em andamento', 'Você estava explorando uma masmorra. Retomar de onde parou?', 'Retomar', 'Sair para a vila'); if (ok) return retomarRun(); abandonarRun(false); }
-  if (St.S.diario.data !== St.hoje()) { St.virarDia(); St.S.diario.baus = null; } trocarMapaSemFade('vila', vila.spawn); G.modo = 'vila'; Au.tocarMusica('vila'); G.ui.hud();
+  if (St.S.diario.data !== St.hoje()) { St.virarDia(); St.S.diario.baus = null; } trocarMapaSemFade('vila', null); G.modo = 'vila'; Au.tocarMusica('vila'); G.ui.hud();
 };
-G.irVila = () => comFade(() => { trocarMapaSemFade('vila', vila.retornoPortal); G.modo = 'vila'; Au.tocarMusica('vila'); });
+G.irVila = () => comFade(() => { trocarMapaSemFade('vila', obterMapa('vila').retornoPortal); Au.tocarMusica('vila'); });
+// viagem rápida (marcos, menu): casa, praça da vila e lugares já visitados
+G.viajar = async (id) => {
+  if (G.modo === 'masmorra' || G.modo === 'batalha' || G.modo === 'titulo') { G.ui.toast('Não dá para viajar agora.'); return false; }
+  const d = DESTINOS_VIAGEM.find((x) => x.id === id); if (!d) return false;
+  await comFade(async () => { trocarMapaSemFade(d.mapa, d.pos); Au.tocarMusica(G.modo === 'vale' ? 'mundo' : 'vila'); }); G.ui.hud(); return true;
+};
+G.NOME_PAINEL = NOME_PAINEL; G.dadiva = () => dadiva(G); G.teo = () => teo(G); G.sonho = () => sonho(G);
+G.retratoNhor = () => { const ap = Object.assign(apPadrao('paladino', 'humano'), { pele: '#d8d0e0', cabeloCor: '#d9d9de', cabelo: 3, olhosCor: '#9aa8b8', marca: 6, roupa1: '#2a2a38', roupa2: '#14141c', sobr: 3, boca: 2, arm1: '#2a2a38', arm2: '#8a8aa0', elmo: false, capa: 2 }); return retrato(ap, { cls: 'paladino', cat: 'pesada', ornam: 5, nivel: 20, capaC: '#3a3a4a', capaC2: '#14141c' }, 4); };
+G.visitados = () => ((S().mundo ||= { visitados: {} }).visitados);
 
 // ---------- entrada ----------
 function instalarEntrada() {
@@ -60,6 +77,7 @@ function instalarEntrada() {
     if (e.ctrlKey || e.metaKey || e.altKey) return; const k = e.key;
     if (emCampo()) { if (k === 'Escape') { document.activeElement.blur(); } return; }
     const d = mapaTeclas[k];
+    if (d && G.ui.dialogoAberto() && (d === 'cima' || d === 'baixo') && G.ui.dialogoNavegar(d)) { e.preventDefault(); return; }
     if (d) { if (!pilha.includes(d)) pilha.push(d); if (!G.ui.modalAberto()) e.preventDefault(); return; }
     if (k === 'Enter' || k === ' ' || k === 'z' || k === 'Z') { if (!G.ui.modalAberto() || G.ui.dialogoAberto()) { pedidoA = true; e.preventDefault(); } }
     else if (k === 'x' || k === 'X' || k === 'Escape' || k === 'Backspace') { pedidoB = true; }
@@ -73,7 +91,7 @@ function instalarEntrada() {
     el.addEventListener('pointerup', solta); el.addEventListener('pointercancel', solta); el.addEventListener('lostpointercapture', () => { up(); el.classList.remove('ativo'); });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   };
-  document.querySelectorAll('[data-dir]').forEach((el) => { const d = el.dataset.dir; bind(el, () => { if (!pilha.includes(d)) pilha.push(d); }, () => { const i = pilha.indexOf(d); if (i >= 0) pilha.splice(i, 1); }); });
+  document.querySelectorAll('[data-dir]').forEach((el) => { const d = el.dataset.dir; bind(el, () => { if (G.ui.dialogoAberto() && (d === 'cima' || d === 'baixo')) { G.ui.dialogoNavegar(d); return; } if (!pilha.includes(d)) pilha.push(d); }, () => { const i = pilha.indexOf(d); if (i >= 0) pilha.splice(i, 1); }); });
   const A = document.getElementById('btn-a'), B = document.getElementById('btn-b'), M = document.getElementById('btn-menu');
   if (A) bind(A, () => { if (!G.ui.modalAberto() || G.ui.dialogoAberto()) pedidoA = true; }, () => {});
   if (B) bind(B, () => { pedidoB = true; }, () => {});
@@ -90,8 +108,10 @@ function atualizar(dt) {
   if (fade.a !== fade.alvo) { const v = dt * 4.2; fade.a = fade.a < fade.alvo ? Math.min(fade.alvo, fade.a + v) : Math.max(fade.alvo, fade.a - v); if (fade.a === fade.alvo && fade.res) { const r = fade.res; fade.res = null; r(); } }
   for (let i = flut.length - 1; i >= 0; i--) { flut[i].t += dt * 0.9; if (flut[i].t > 1.15) flut.splice(i, 1); }
   Rn.PART.passo(dt);
+  if (St.S && G.modo !== 'masmorra' && !(G.modo === 'batalha' && cenaBat === 'masmorra') && G.modo !== 'titulo') { const [px, py] = posJogador(); passoVida(dt, St.S, px * TS + 16, py * TS + 16, G.ui && G.ui.toast); if (!Vida.onda || true) ambiente(dt, Rn.PART, Rn.cam, Rn.VW, vidaAtual()); }
   if (G.modo === 'batalha') { Ba.atualizar(dt); sincronizarVisaoBatalha(); consumirPedidos(); return; }
   if (G.modo === 'titulo') { atualizarNpcs(dt); consumirPedidos(); return; }
+  visitaT += dt; if (visitaT > 4 && !G.ocupado && !P.mov && (G.modo === 'vila' || G.modo === 'vale') && !(mapa && mapa.interior) && !G.ui.modalAberto() && !fade.alvo && St.S) { visitaT = 0; if (visitaPendente()) visitaDoRei(G); }
   if (P.mov) { P.mov.t += dt / P.mov.dur; if (P.mov.t >= 1) { P.x = P.mov.x1; P.y = P.mov.y1; P.mov = null; P.passo++; chegou(); } }
   atualizarNpcs(dt); if (D) atualizarMonstrosAnim(dt);
   const livre = !G.ocupado && !G.ui.modalAberto() && fade.a < 0.2;
@@ -106,28 +126,30 @@ function consumirPedidos() {
 function fadeTo(v) { fade.alvo = v; if (fade.a === v) return Promise.resolve(); return new Promise((r) => { fade.res = r; }); }
 async function comFade(fn) { G.ocupado = true; await fadeTo(1); try { await fn(); } finally { await fadeTo(0); G.ocupado = false; } }
 
-// ---------- mapas fixos (vila e vale) ----------
-function trocarMapaSemFade(qual, pos) {
-  mapa = qual === 'vila' ? vila : vale; G.mapa = qual; P.x = pos.x; P.y = pos.y; P.mov = null; P.dir = 'baixo'; D = null; G.D = null; flut.length = 0;
-  npcs = qual === 'vila' ? vila.npcs.map((n) => ({ ...n, home: { x: n.x, y: n.y }, dir: 'baixo', mov: null, t: 1 + Math.random() * 3, passo: 0 })) : [];
-  if (qual === 'vale' && St.S) garantirBausDoDia();
+// ---------- mapas fixos (região, vilas e interiores) ----------
+const musicaDe = (m) => (m.tipo === 'regiao' ? 'mundo' : 'vila');
+function trocarMapaSemFade(id, pos) {
+  if (id.includes('/')) obterMapa(id.split('/')[0]); // garante a fábrica do interior
+  mapa = obterMapa(id); G.mapa = id; G.mp = mapa; const p = pos || mapa.spawn || { x: 1, y: 1 };
+  P.x = p.x; P.y = p.y; P.mov = null; P.dir = 'baixo'; D = null; G.D = null; flut.length = 0; pilha.length = 0;
+  npcs = mapa.npcs.map((n) => ({ ...n, home: { x: n.x, y: n.y }, dir: 'baixo', mov: null, t: 1 + Math.random() * 3, passo: 0 }));
+  G.modo = mapa.tipo === 'regiao' ? 'vale' : (G.modo === 'titulo' ? 'titulo' : 'vila');
+  if (St.S) { G.visitados()[id.split('/')[0]] = true; if (mapa.tipo === 'regiao') garantirBausDoDia(); }
+  Rn.PART.limpar && Rn.PART.limpar();
 }
-function garantirBausDoDia() { const s = S(); if (!s.diario.baus) s.diario.baus = bausDoDia(vale, s.diario.data, s.criado, St.capituloDisponivel() || 20); }
+function garantirBausDoDia() { const s = S(); if (!s.diario.baus) s.diario.baus = bausDoDia(mapa, s.diario.data, s.criado, St.capituloDisponivel() || 20); }
 async function trocarMapa(para, pos) {
-  await comFade(async () => {
-    if (para === 'vale') { trocarMapaSemFade('vale', pos || vale.spawn); G.modo = 'vale'; Au.tocarMusica('mundo'); }
-    else { trocarMapaSemFade('vila', pos || vila.spawn); G.modo = 'vila'; Au.tocarMusica('vila'); }
-  });
+  await comFade(async () => { trocarMapaSemFade(para, pos); Au.tocarMusica(musicaDe(mapa)); G.ui.hud(); });
 }
 function npcEm(x, y) { return npcs.find((n) => (n.x === x && n.y === y) || (n.mov && n.mov.x1 === x && n.mov.y1 === y)); }
-function baus() { return G.mapa === 'vale' && S() && S().diario.baus ? S().diario.baus : []; }
+function baus() { return mapa && mapa.tipo === 'regiao' && S() && S().diario.baus ? S().diario.baus : []; }
 function bauEm(x, y) { return baus().find((b) => b.x === x && b.y === y); }
 
 function iniciarMov(d) {
   P.dir = d; const [dx, dy] = DIRV[d], nx = P.x + dx, ny = P.y + dy;
   if (G.modo === 'masmorra') return movMasmorra(d, nx, ny);
   const g = mapa.gat[ny * mapa.w + nx];
-  if (g && !g.passa) { pilha.length = 0; acionar(g); return; }
+  if (g && !g.passa && !mapa.interior && g.tipo !== 'obj') { pilha.length = 0; acionar(g); return; }
   const b = bauEm(nx, ny); if (b) { pilha.length = 0; abrirBauDoVale(b); return; }
   if (solidoEm(mapa, nx, ny) || npcEm(nx, ny)) return;
   P.mov = { x0: P.x, y0: P.y, x1: nx, y1: ny, t: 0, dur: 0.17 };
@@ -136,7 +158,7 @@ function chegou() {
   if (G.modo === 'masmorra') return chegouMasmorra();
   const g = mapa.gat[P.y * mapa.w + P.x];
   if (g && g.passa) { pilha.length = 0; acionar(g); return; }
-  if (G.mapa === 'vale') { const i = P.y * vale.w + P.x; if (vale.enc[i] && --stepCool <= 0 && Math.random() < 0.08) { stepCool = 7; encontroDoVale(i); } }
+  if (mapa.tipo === 'regiao') { const i = P.y * mapa.w + P.x; if (mapa.enc[i] && --stepCool <= 0 && Math.random() < 0.08) { stepCool = 7; encontroDoVale(i); } }
 }
 function interagir() {
   if (G.modo === 'masmorra') return interagirMasmorra();
@@ -144,12 +166,23 @@ function interagir() {
   const n = npcEm(tx, ty); if (n) return falarComNpc(n);
   const g = mapa.gat[ty * mapa.w + tx]; if (g) return acionar(g);
   const b = bauEm(tx, ty); if (b) return abrirBauDoVale(b);
+  // balcão: o morador logo atrás da bancada atende
+  const n2 = npcEm(tx + dx, ty + dy); if (n2 && n2.painel && solidoEm(mapa, tx, ty)) return falarComNpc(n2);
 }
 async function acionar(g) {
-  Au.sfx(g.tipo === 'painel' ? 'porta' : 'select');
+  Au.sfx(g.tipo === 'painel' ? 'porta' : g.tipo === 'mapa' ? 'passo' : 'select');
   if (g.tipo === 'painel') G.ui.painel(g.id);
-  else if (g.tipo === 'mapa') { if (g.para === 'vale') await trocarMapa('vale'); else await trocarMapa('vila', { x: 14, y: 26 }); }
+  else if (g.tipo === 'mapa') await trocarMapa(g.para, g.pos || null);
   else if (g.tipo === 'cap') G.ui.tentarCapitulo(g.n);
+  else if (g.tipo === 'cata') await entrarCata(g);
+  else if (g.tipo === 'obj') await G.interagirObjeto(g.id, g);
+}
+G.irMapa = (id, pos) => trocarMapa(id, pos || null);
+G.interagirObjeto = (id, g) => interagirObjeto(id, G, { g });
+async function entrarCata(g) {
+  const s = S(); if (s.run) { G.ui.toast('Você já está em uma masmorra.'); return; }
+  const ok = await G.ui.confirmar(g.rot || 'Catacumbas', `Uma entrada para masmorras sem fim, gerada de novo a cada visita. Cada andar custa 1 Tocha (você tem ${s.heroi.tochas}). O saque vem das criaturas, baús e armadilhas — e a Maré da Inércia se importa com quem não treina.`, 'Descer', 'Ficar');
+  if (ok) await G.entrarMasmorra({ tipo: 'cata', tema: g.tema });
 }
 async function abrirBauDoVale(b) {
   if (b.aberto) { G.ui.toast('Baú vazio. Novos baús surgem a cada amanhecer.'); return; }
@@ -160,26 +193,12 @@ async function abrirBauDoVale(b) {
 const npcVis = (pf) => ({ nivel: 6, capaC: '#8a2a1a', capaC2: '#5a1a10', ...pf.vis });
 function spriteNpc(n) { const pf = NPC_PERFIL[n.id]; if (!pf) return null; const d = n.dir === 'dir' ? 'esq' : n.dir; return spritePessoa(pf.ap, npcVis(pf), d, n.mov ? (n.passo % 2 ? 'andar1' : 'andar2') : 'idle'); }
 async function falarComNpc(n) {
-  const def = NPCS[n.id]; if (!def) return; G.ocupado = true; const s = S(); const pf = NPC_PERFIL[n.id];
+  const def = NPCS[n.id]; if (!def) return; G.ocupado = true; const pf = NPC_PERFIL[n.id];
   const dx = P.x - n.x, dy = P.y - n.y; n.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'dir' : 'esq') : (dy > 0 ? 'baixo' : 'cima'); n.mov = null;
   const ret = pf ? retrato(pf.ap, npcVis(pf), 4) : null; const nome = def.nome + (def.papel ? ` · ${def.papel}` : '');
-  const linhas = [def.falas[rnd(def.falas.length)]]; const ctxL = falaContextual(n.id); if (ctxL) linhas.push(ctxL);
-  Au.sfx('select'); await G.ui.dialogo(nome, linhas, { retrato: ret });
-  const pred = n.painel ? PREDIOS.find((p) => p.id === n.painel) : null; let abrir = false;
-  if (pred || (pf && pf.afin)) {
-    const opc = []; if (pred) opc.push({ id: 'painel', rot: `🚪 Abrir: ${pred.nome}`, sub: 'Usar o serviço deste lugar' }); if (pf && pf.afin) { const a = (s.npcs[n.id] ||= { afin: 0, ultimo: null }); opc.push({ id: 'papo', rot: '🗣️ Bater um papo', sub: a.ultimo === St.hoje() ? `Afinidade ${a.afin} (já conversaram hoje)` : `Afinidade ${a.afin} · +1 por dia de conversa` }); } opc.push({ id: 'sair', rot: 'Até logo' });
-    const r = await G.ui.dialogoEscolha({ nome, retrato: ret, texto: pf && pf.gosta ? pf.gosta : 'Posso ajudar em algo?', opcoes: opc });
-    if (r === 'painel') abrir = true; else if (r === 'papo') await papoNpc(n, def, pf, ret, nome);
-  }
-  G.ocupado = false; if (abrir) G.ui.painel(n.painel);
-}
-async function papoNpc(n, def, pf, ret, nome) {
-  const s = S(); const a = (s.npcs[n.id] ||= { afin: 0, ultimo: null }); const hoje = St.hoje();
-  if (a.ultimo === hoje) { await G.ui.dialogo(nome, ['Já conversamos hoje. Volte amanhã — sempre tenho mais uma história.'], { retrato: ret }); return; }
-  a.ultimo = hoje; a.afin++; const linha = pf.afin[(a.afin - 1) % pf.afin.length]; await G.ui.dialogo(nome, [linha], { retrato: ret });
-  const rec = AFIN_RECOMPENSAS[a.afin];
-  if (rec) { if (rec.ouro) St.ganharOuro(rec.ouro); if (rec.item) St.invAdd(rec.item); Au.sfx('coin'); await G.ui.dialogo(nome, [`(${def.nome} ${rec.txt})`, `Afinidade ${a.afin} ♥ ${rec.ouro ? `+${rec.ouro} ouro` : ''}${rec.item ? ` + ${ITENS[rec.item] ? ITENS[rec.item].nome : rec.item}` : ''}`], { retrato: ret }); }
-  St.salvar(); G.ui.hud();
+  Au.sfx('select'); let abrir = false;
+  try { abrir = await conversar(G, n, def, pf, ret, nome, falaContextual(n.id)); } finally { G.ocupado = false; }
+  if (abrir) G.ui.painel(n.painel);
 }
 function falaContextual(id) {
   const s = S(), Dd = St.dia(), h = s.historia;
@@ -253,7 +272,7 @@ async function encerrarBatalha(res, c) {
   const B = res.B, s = S(); const fim = res.fim; G.ocupado = true; const origem = c.origem;
   if (fim === 'derrota') {
     const perdido = s.run ? s.run.ouroGanho : 0; St.derrotaNaMasmorra(); if (perdido) St.ganharOuro(-perdido); D = null; G.D = null;
-    await fadeTo(1); trocarMapaSemFade('vila', vila.retornoPortal); G.modo = 'vila'; Au.tocarMusica('vila'); s.heroi.hp = Math.max(s.heroi.hp, Math.floor(St.der().hpMax * 0.25)); St.salvar(); await fadeTo(0); G.ocupado = false;
+    await fadeTo(1); trocarMapaSemFade('vila', obterMapa('vila').retornoPortal); G.modo = 'vila'; Au.tocarMusica('vila'); s.heroi.hp = Math.max(s.heroi.hp, Math.floor(St.der().hpMax * 0.25)); St.salvar(); await fadeTo(0); G.ocupado = false;
     G.ui.toast(perdido ? `Você acorda na vila. Perdeu ${perdido} de ouro da expedição.` : 'Você acorda na vila, ferido, mas vivo.'); G.ui.hud(); G.ui.drenar(); return;
   }
   P.x = B.h.x; P.y = B.h.y; P.mov = null; G.modo = G.anterior; if (D) { atualizarVisao(); }
@@ -272,7 +291,7 @@ function sincronizarVisaoBatalha() { if (!D || cenaBat !== 'masmorra') return; c
 
 // ---------- encontros no Vale ----------
 async function encontroDoVale(i) {
-  const s = S(); const reg = vale.reg[i]; const ativo = St.capituloDisponivel() || 20; const capN = Math.max(1, Math.min(reg, ativo));
+  const s = S(); const reg = mapa.reg[i]; const ativo = St.capituloDisponivel() || 20; const capN = Math.max(1, Math.min(reg, ativo));
   const cap = CAPITULOS[capN - 1]; const pool = R.poolDoCapitulo(cap); const n = tamanhoGrupo(Math.random, s.heroi.nivel, 3);
   const inimigos = criarGrupo({ pool, n, escala: cap.comuns, aj: R.AJUSTE_CLASSE[s.heroi.cls] || 1, inercia: s.historia.inercia, ciclo: s.historia.ciclo });
   pilha.length = 0; G.ocupado = true; Au.sfx('tocha'); await flashTela(); G.ocupado = false;
@@ -282,11 +301,11 @@ async function flashTela() { for (let k = 0; k < 3; k++) { fade.a = 0.9; await e
 
 // ======================= MASMORRA =======================
 const rand32 = () => (Math.random() * 4294967296) >>> 0;
-G.entrarMasmorra = async ({ tipo, cap = 1 }) => {
+G.entrarMasmorra = async ({ tipo, cap = 1, tema = null }) => {
   const s = S(); if (s.run) { G.ui.toast('Você já está em uma masmorra.'); return false; }
   if (!St.tochaDisponivel()) { G.ui.toast(s.heroi.exaustao >= 5 ? 'Exausto demais para entrar. Descanse e coma.' : 'Sem Tochas! Treine, estude ou cumpra missões para ganhar mais.'); return false; }
   St.gastarTocha(); const andar = tipo === 'historia' ? Math.min(s.historia.checkpoint[cap] || 1, CAPITULOS[cap - 1].andares) : 1;
-  s.run = { tipo, cap, andar, seedBase: rand32(), ouroGanho: 0, itensGanhos: [], origem: G.mapa, d: null };
+  s.run = { tipo, cap, andar, tema, seedBase: rand32(), ouroGanho: 0, itensGanhos: [], origem: G.mapa, opos: { x: P.x, y: P.y }, d: null };
   await comFade(async () => { G.modo = 'masmorra'; carregarAndar(null); });
   if (tipo === 'historia') { s.historia.checkpoint[cap] = andar; }
   Au.tocarMusica('masmorra'); St.salvar(); G.ui.hud(); return true;
@@ -298,7 +317,7 @@ function chefeCatacumbas(andar, nivel, explorador = false) {
 }
 function carregarAndar(salvo) {
   const s = S(), r = s.run; const cap = r.tipo === 'historia' ? CAPITULOS[r.cap - 1] : null;
-  const final = cap ? r.andar === cap.andares : r.andar % 5 === 0; const tema = cap ? cap.tema : TEMAS_CATA[(r.andar - 1) % TEMAS_CATA.length];
+  const final = cap ? r.andar === cap.andares : r.andar % 5 === 0; const tema = cap ? cap.tema : (r.tema || TEMAS_CATA[(r.andar - 1) % TEMAS_CATA.length]);
   const nivel = cap ? cap.n : s.heroi.nivel; const explorador = !cap && s.campanha && s.campanha.modo === 'explorador'; let chefe = final ? (cap ? cap.boss : chefeCatacumbas(r.andar, nivel, explorador)) : null;
   if (chefe && cap && cap.n === 20) { const nr = nReliquias(s); if (nr) chefe = { ...chefe, esc: chefe.esc * (1 - 0.08 * nr), dm: chefe.dm * (1 - 0.04 * nr) }; }
   const seed = R.hashStr(`${r.tipo}:${r.cap}:${r.andar}:${r.seedBase}:${s.historia.ciclo}`);
@@ -321,7 +340,7 @@ function salvarRun() {
   r.d = { pos: { x: P.x, y: P.y }, mortos: idxs((e) => (e.tipo === 'monstro' || e.tipo === 'chefe') && e.vivo === false), abertos: idxs((e) => e.tipo === 'bau' && e.aberto), usados: idxs((e) => (e.tipo === 'santuario' || e.tipo === 'tocha_cx') && e.usado), desarmadas: idxs((e) => e.tipo === 'armadilha' && !e.ativa), expl: Array.from(d.explorado).join(''), escadaAberta: !!D.escadaAberta };
 }
 function atualizarVisao() {
-  const s = S(); const ex = s.heroi.exaustao || 0; D.raio = 6 + (D.bonusVisao || 0) - (ex >= 2 ? 1 : 0) - (ex >= 4 ? 1 : 0); const d = D.d;
+  const s = S(); const ex = s.heroi.exaustao || 0; D.raio = 6 + (D.bonusVisao || 0) + (D.luzMagica || 0) - (ex >= 2 ? 1 : 0) - (ex >= 4 ? 1 : 0); const d = D.d;
   D.vis = visiveis(d, P.x, P.y, D.raio); for (const i of D.vis) d.explorado[i] = 1;
   const pass = 10 + (R.derivar(s).M.SAB || 0), dc = 12 + Math.floor(d.andar / 3);
   for (const e of d.ents) if (e.tipo === 'armadilha' && e.oculta && e.ativa && Math.abs(e.x - P.x) <= 1 && Math.abs(e.y - P.y) <= 1 && pass >= dc) { e.oculta = false; Rn.flutuar(flut, e.x, e.y - 0.4, 'ARMADILHA!', '#ff9f40'); }
@@ -402,15 +421,35 @@ async function pedirSaida() {
 async function sairMasmorra() {
   const s = S(), r = s.run; const origem = r ? r.origem : 'vila'; const cap = r && r.tipo === 'historia' ? r.cap : null; s.run = null; D = null; G.D = null; St.salvar();
   await comFade(async () => {
-    if (origem === 'vale') { const e = vale.extra[(cap || 1) - 1]; trocarMapaSemFade('vale', { x: e.x, y: e.y + 1 }); G.modo = 'vale'; Au.tocarMusica('mundo'); }
-    else { trocarMapaSemFade('vila', vila.retornoPortal); G.modo = 'vila'; Au.tocarMusica('vila'); }
+    const opos = r && r.opos; let idm = origem, pos = opos || null;
+    if (!opos) { if (origem === 'vale') { const v = obterMapa('vale'); const e = v.extra.find((q) => q.n === (cap || 1)) || v.extra[0]; pos = { x: e.x, y: e.y + 1 }; } else { idm = 'vila'; pos = obterMapa('vila').retornoPortal; } }
+    try { trocarMapaSemFade(idm, pos); } catch (e) { trocarMapaSemFade('vila', obterMapa('vila').retornoPortal); }
+    G.modo = mapa.tipo === 'regiao' ? 'vale' : 'vila'; Au.tocarMusica(musicaDe(mapa));
   });
   G.ui.hud(); G.ui.drenar();
 }
 function abandonarRun() { const s = S(); s.run = null; D = null; G.D = null; St.salvar(); }
 G.sair = sairMasmorra;
+// ---------- efeitos de exploração das magias (Grimório) ----------
+const REVELA = { revela_mon: ['monstro', 'chefe'], revela_bau: ['bau', 'santuario', 'tocha_cx'], revela_arm: ['armadilha'], revela_tudo: ['monstro', 'chefe', 'bau', 'santuario', 'tocha_cx', 'armadilha'] };
+G.efeitoExploracao = (ex, v) => {
+  const dentro = !!(D && G.modo === 'masmorra'); const s = S(); const so = { erro: 'Só faz efeito dentro de uma masmorra.' };
+  if (REVELA[ex]) { if (!dentro) return so; const d = D.d; const raio = v || 8; let n = 0;
+    for (const e of d.ents) { if (e.vivo === false || !REVELA[ex].includes(e.tipo)) continue; if (Math.max(Math.abs(e.x - P.x), Math.abs(e.y - P.y)) > raio) continue; if (e.tipo === 'armadilha') e.oculta = false; e.revelado = true;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = e.x + dx, y = e.y + dy; if (x >= 0 && y >= 0 && x < d.w && y < d.h) d.explorado[y * d.w + x] = 1; } n++; }
+    return { msg: n ? `Você percebe ${n} presença(s) ou objeto(s) em ${raio} casas — marcados no mapa.` : `Nada por perto (raio ${raio}).` }; }
+  if (ex === 'luz') { if (!dentro) return so; D.luzMagica = Math.max(D.luzMagica || 0, v || 1); atualizarVisao(); return { msg: `Luz mágica: sua visão aumenta ${D.luzMagica} casa(s) neste andar.` }; }
+  if (ex === 'knock') { if (!dentro) return so; const e = D.d.ents.filter((q) => q.tipo === 'bau' && !q.aberto && q.vivo !== false && Math.max(Math.abs(q.x - P.x), Math.abs(q.y - P.y)) <= 6).sort((a, b) => Math.abs(a.x - P.x) + Math.abs(a.y - P.y) - (Math.abs(b.x - P.x) + Math.abs(b.y - P.y)))[0]; if (!e) return { erro: 'Nenhum baú fechado a até 6 casas.' }; abrirBauMasmorra(e); return { msg: 'O baú se abre sozinho — o butim já está na sua mochila.' }; }
+  if (ex === 'viajar') { if (!dentro) return so; return { msg: 'O ar se dobra e você sai da masmorra.', acao: 'sair' }; }
+  if (ex === 'dica') {
+    if (dentro) { const d = D.d; const vivos = d.ents.filter((e) => (e.tipo === 'monstro' || e.tipo === 'chefe') && e.vivo !== false); const baus = d.ents.filter((e) => e.tipo === 'bau' && !e.aberto).length; const arm = d.ents.filter((e) => e.tipo === 'armadilha' && e.ativa).length; let esc = ''; for (let i = 0; i < d.tiles.length; i++) if (d.tiles[i] === T.DESCE) { const x = i % d.w, y = Math.floor(i / d.w); esc = ` A escada para baixo fica ${y < P.y - 2 ? 'ao norte' : y > P.y + 2 ? 'ao sul' : ''}${x < P.x - 2 ? ' a oeste' : x > P.x + 2 ? ' a leste' : ''} (${Math.abs(x - P.x) + Math.abs(y - P.y)} passos).`.replace('  ', ' '); break; }
+      return { msg: `Presságio: restam ${vivos.length} criatura(s)${vivos.some((e) => e.tipo === 'chefe') ? ' (um Guardião entre elas)' : ''}, ${baus} baú(s) fechado(s) e ${arm} armadilha(s) neste andar.${esc}` }; }
+    const q = questsAtivas(s)[0]; const pr = q && progressoQuest(s, q); return { msg: q ? `Os presságios apontam: «${q.titulo}» — ${pr ? pr.txt : q.resumo}` : 'Os presságios estão calmos: nenhuma missão pede pressa agora.' };
+  }
+  return { erro: 'Esse efeito ainda não tem uso aqui.' };
+};
 G.lutarTeste = (ids, n) => { const s = S(); const [eh, ed] = R.escalaNivel(s.heroi.nivel); const ini = ids.map((id) => R.criarMonstro(id, { esc: eh, ov: { dm: ed } })); return lutar({ inimigos: ini.map((m) => comPerfil(m, Math.random)), origem: 'vale', tema: 'floresta' }); };
-G.encontro = (i) => encontroDoVale(i == null ? vale.enc.findIndex((v) => v) : i);
+G.encontro = (i) => encontroDoVale(i == null ? mapa.enc.findIndex((v) => v) : i);
 async function aposVitoria(c) {
   const e = c.ents && c.ents.find((q) => q.tipo === 'chefe'); if (!e) return; const d = D.d;
   if (D.cap) {
@@ -430,7 +469,7 @@ function desenhar() {
 }
 function posJogador() { return P.mov ? [P.x + (P.mov.x1 - P.x) * P.mov.t, P.y + (P.mov.y1 - P.y) * P.mov.t] : [P.x, P.y]; }
 function camera(mw, mh) {
-  if (G.modo === 'titulo') { Rn.cam.x = Math.round(Math.max(0, Math.min(mw * TS - Rn.VW.w, 15 * TS - Rn.VW.w / 2 + Math.sin(tempo * 0.2) * 30))); Rn.cam.y = Math.round(Math.max(0, Math.min(mh * TS - Rn.VW.h, 12 * TS - Rn.VW.h / 2))); return; }
+  if (G.modo === 'titulo') { Rn.cam.x = Math.round(Math.max(0, Math.min(mw * TS - Rn.VW.w, (mw / 2) * TS - Rn.VW.w / 2 + Math.sin(tempo * 0.2) * 30))); Rn.cam.y = Math.round(Math.max(0, Math.min(mh * TS - Rn.VW.h, 17 * TS - Rn.VW.h / 2))); return; }
   if (G.modo === 'batalha') { if (Ba.camLivre()) return; const f = Ba.camFoco(); if (f) Rn.camPara(f.x, f.y, mw, mh, 0.16); return; }
   const [x, y] = posJogador(); Rn.camPara(x, y, mw, mh);
 }
@@ -438,14 +477,19 @@ function itemJogador() {
   const s = S(); if (!s) return null; const [x, y] = posJogador();
   return { y: (y + 1) * TS + 0.3, d: (c) => { const tk = Rn.tokenHeroiDe(s); if (tk) { Rn.tokenEm(c, tk, x, y, P.dir, P); return; } const pose = P.mov ? ((P.passo + Math.floor(P.mov.t * 2)) % 2 ? 'andar1' : 'andar2') : 'idle'; const dir = P.dir; Rn.sombraTile(c, x, y, 9, 3.5, 0.3); Rn.pessoaEm(c, Rn.spriteHeroi(s, dir === 'dir' ? 'esq' : dir, pose), x, y, dir); } };
 }
+// pins de missão: "!" dourado sobre quem tem missão ativa (nas vilas) e sobre os lugares da missão (na região)
+function pinsDeMissao() { const out = { npcs: new Set(), lugares: [] }; if (!St.S || !St.S.campanha) return out; for (const q of questsAtivas(St.S)) { out.npcs.add(q.npc); for (const k of QLUG[q.id] || []) { const l = LUG[k]; if (l) out.lugares.push({ x: l.x, y: l.y, p: q.tipo === 'principal' }); } } return out; }
 function desenharMapa(ctx) {
-  const m = mapa; camera(m.w, m.h); const itens = []; const titulo = G.modo === 'titulo', bat = G.modo === 'batalha';
+  const m = mapa; camera(m.w, m.h); const itens = []; const pins = G.modo === 'titulo' ? { npcs: new Set(), lugares: [] } : pinsDeMissao(); const titulo = G.modo === 'titulo', bat = G.modo === 'batalha';
   for (const n of npcs) { const nx = n.mov ? n.x + (n.mov.x1 - n.x) * n.mov.t : n.x, ny = n.mov ? n.y + (n.mov.y1 - n.y) * n.mov.t : n.y; itens.push({ y: (ny + 1) * TS, d: (c) => { const pf = NPC_PERFIL[n.id]; const tkn = pf && Rn.tokenPessoaDe(pf.ap, npcVis(pf), pf.vis && pf.vis.cls === 'mago' ? 'cajado' : null); if (tkn) { Rn.tokenEm(c, tkn, nx, ny, n.dir, n); return; } const sp = spriteNpc(n); if (!sp) return; Rn.sombraTile(c, nx, ny, 9, 3.5, 0.28); Rn.pessoaEm(c, sp, nx, ny, n.dir); } }); }
-  for (const b of baus()) itens.push({ y: (b.y + 1) * TS, d: (c) => { const img = spriteObjeto(b.aberto ? 'bauA' : 'bauF'); c.drawImage(img, Math.round(b.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round((b.y + 1) * TS - img.height - Rn.cam.y)); if (!b.aberto) texto(c, '!', Math.round(b.x * TS + 16 - Rn.cam.x), Math.round(b.y * TS - 6 - Rn.cam.y + Math.sin(tempo * 5) * 1.5), { cor: '#ffd23f', tam: 10 }); } });
+  for (const n of npcs) if (pins.npcs.has(n.id)) { const nx = n.mov ? n.x + (n.mov.x1 - n.x) * n.mov.t : n.x, ny = n.mov ? n.y + (n.mov.y1 - n.y) * n.mov.t : n.y; itens.push({ y: (ny + 2) * TS, d: (c) => { const bob = Math.sin(tempo * 4 + n.x) * 2; texto(c, '!', Math.round(nx * TS + 16 - Rn.cam.x), Math.round(ny * TS - 12 - Rn.cam.y + bob), { cor: '#ffd23f', tam: 14 }); } }); }
+  if (m.tipo === 'regiao') for (const l of pins.lugares) itens.push({ y: (l.y + 4) * TS, d: (c) => { const bob = Math.sin(tempo * 3 + l.x) * 2; texto(c, l.p ? '★' : '!', Math.round(l.x * TS + 16 - Rn.cam.x), Math.round((l.y - 2) * TS - Rn.cam.y + bob), { cor: l.p ? '#ffd23f' : '#7dd8ff', tam: 16 }); } });
+  for (const b of baus()) itens.push({ y: (b.y + 1) * TS, d: (c) => { const img = spriteObjeto(b.aberto ? 'bauA' : 'bauF'); c.drawImage(img, Math.round(b.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round(b.y * TS + 16 - img.height / 2 - Rn.cam.y)); if (!b.aberto) texto(c, '!', Math.round(b.x * TS + 16 - Rn.cam.x), Math.round(b.y * TS - 6 - Rn.cam.y + Math.sin(tempo * 5) * 1.5), { cor: '#ffd23f', tam: 10 }); } });
   if (!titulo && !bat) { const j = itemJogador(); if (j) itens.push(j); }
   if (bat) itens.push(...Ba.itens());
-  const opc = { tempo, itens, vila: G.mapa === 'vila', antes: bat ? Ba.desenharAntes : null, depois: (c) => { Rn.desenharFlutuantes(c, flut); Rn.PART.desenhar(c, Rn.cam.x, Rn.cam.y); if (bat) Ba.desenharDepois(c); } };
-  if (G.mapa === 'vale' && St.S) { const ativo = St.capituloDisponivel(); opc.caps = vale.extra.map((e) => ({ n: e.n, x: e.x, y: e.y, ativo: e.n === ativo, limpo: St.S.historia.limpos.includes(e.n) })); opc.vale = { reg: vale.reg, lim: Math.max(ativo || 20, 1) + 1.2 }; }
+  const opc = { tempo, itens, antes: bat ? Ba.desenharAntes : null, depois: (c) => { Rn.desenharFlutuantes(c, flut); Rn.PART.desenhar(c, Rn.cam.x, Rn.cam.y); if (bat) Ba.desenharDepois(c); }, vida: St.S ? { v: vidaAtual(), onda: Vida.onda } : null, batalha: bat };
+  if (St.S && m.extra && m.extra.length) { const ativo = St.capituloDisponivel(); opc.caps = m.extra.map((e) => ({ n: e.n, x: e.x, y: e.y, spr: e.spr, cata: e.cata, ativo: !e.cata && e.n === ativo, limpo: !e.cata && St.S.historia.limpos.includes(e.n) })); }
+  if (m.reg && St.S) { const ativo = St.capituloDisponivel(); opc.vale = { reg: m.reg, lim: Math.max(ativo || 20, 1) + 1.2 }; }
   Rn.desenharExterno(ctx, m, opc);
 }
 function desenharMasmorra(ctx) {
@@ -453,12 +497,12 @@ function desenharMasmorra(ctx) {
   const sp = (e) => spriteMonstro(e.spr, e.pal || {}, e.mon.id || 'x', e.mon.tags || [], e.ap || null);
   for (const e of d.ents) {
     if (e.vivo === false) continue; const i = e.y * d.w + e.x; const vis = D.vis.has(i);
-    if (e.tipo === 'monstro' || e.tipo === 'chefe') { if (!vis || (bat && D.emBatalha)) continue; if (bat) continue; itens.push({ y: (e.py + 1) * TS, d: (c) => { const tkm = e.ap ? Rn.tokenPessoaDe(e.ap, { cls: 'ladino', cat: 'leve', capaC: '#4a3a2a' }, 'adaga') : Rn.tokenMonstroDe(e.mon); if (tkm) { const ddx = pxf - e.px, ddy = pyf - e.py; Rn.tokenEm(c, tkm, e.px, e.py, Math.abs(ddx) >= Math.abs(ddy) ? (ddx > 0 ? 'dir' : 'esq') : (ddy > 0 ? 'baixo' : 'cima'), e); const cx2 = Math.round(e.px * TS + 16 - Rn.cam.x), cy2 = Math.round(e.py * TS + 16 - tkm.px / 2 - Rn.cam.y); if (e.acordado) texto(c, '!', cx2, cy2 - 4, { cor: '#ffd23f', tam: 10 }); else texto(c, 'Z', cx2 + 8, cy2 - 2 + Math.sin(tempo * 2) * 1.5, { cor: '#8ab0ff', tam: 8 }); return; } const spr = sp(e); const bob = Math.sin(tempo * 3 + e.x) * 0.6 / TS; Rn.sombraTile(c, e.px, e.py, e.tipo === 'chefe' ? 14 : 10, 4, 0.3); Rn.monstroEm(c, spr, e.px, e.py + bob); const cx = Math.round(e.px * TS + 16 - Rn.cam.x), cy = Math.round((e.py + 1) * TS + 1 - spr.height - Rn.cam.y); if (e.acordado) texto(c, '!', cx, cy - 4, { cor: '#ffd23f', tam: 10 }); else texto(c, 'Z', cx + 8, cy - 2 + Math.sin(tempo * 2) * 1.5, { cor: '#8ab0ff', tam: 8 }); } }); }
+    if (e.tipo === 'monstro' || e.tipo === 'chefe') { if (!(vis || e.revelado) || (bat && D.emBatalha)) continue; if (bat) continue; itens.push({ y: (e.py + 1) * TS, d: (c) => { const tkm = e.ap ? Rn.tokenPessoaDe(e.ap, { cls: 'ladino', cat: 'leve', capaC: '#4a3a2a' }, 'adaga') : Rn.tokenMonstroDe(e.mon); if (tkm) { const ddx = pxf - e.px, ddy = pyf - e.py; Rn.tokenEm(c, tkm, e.px, e.py, Math.abs(ddx) >= Math.abs(ddy) ? (ddx > 0 ? 'dir' : 'esq') : (ddy > 0 ? 'baixo' : 'cima'), e); const cx2 = Math.round(e.px * TS + 16 - Rn.cam.x), cy2 = Math.round(e.py * TS + 16 - tkm.px / 2 - Rn.cam.y); if (e.acordado) texto(c, '!', cx2, cy2 - 4, { cor: '#ffd23f', tam: 10 }); else texto(c, 'Z', cx2 + 8, cy2 - 2 + Math.sin(tempo * 2) * 1.5, { cor: '#8ab0ff', tam: 8 }); return; } const spr = sp(e); const bob = Math.sin(tempo * 3 + e.x) * 0.6 / TS; Rn.sombraTile(c, e.px, e.py, e.tipo === 'chefe' ? 14 : 10, 4, 0.3); Rn.monstroEm(c, spr, e.px, e.py + bob); const cx = Math.round(e.px * TS + 16 - Rn.cam.x), cy = Math.round((e.py + 1) * TS + 1 - spr.height - Rn.cam.y); if (e.acordado) texto(c, '!', cx, cy - 4, { cor: '#ffd23f', tam: 10 }); else texto(c, 'Z', cx + 8, cy - 2 + Math.sin(tempo * 2) * 1.5, { cor: '#8ab0ff', tam: 8 }); } }); }
     else if (!d.explorado[i]) continue;
-    else if (e.tipo === 'bau') itens.push({ y: (e.y + 1) * TS, d: (c) => { const img = spriteObjeto(e.aberto ? 'bauA' : 'bauF'); c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round((e.y + 1) * TS - img.height - Rn.cam.y)); } });
-    else if (e.tipo === 'santuario') itens.push({ y: (e.y + 1) * TS, d: (c) => { const img = spriteObjeto('santuario', 0, Math.floor(tempo * 2.2) % 2); c.globalAlpha = e.usado ? 0.5 : 1; c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round((e.y + 1) * TS - img.height - Rn.cam.y)); c.globalAlpha = 1; } });
-    else if (e.tipo === 'tocha_cx') { if (!e.usado) itens.push({ y: (e.y + 1) * TS, d: (c) => { const img = spriteObjeto('caixaTocha'); c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round((e.y + 1) * TS - img.height - Rn.cam.y)); } }); }
-    else if (e.tipo === 'armadilha') { if (e.ativa && !e.oculta) itens.push({ y: e.y * TS + 4, d: (c) => { const img = spriteObjeto('armadilha'); c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round((e.y + 1) * TS - img.height - Rn.cam.y)); } }); }
+    else if (e.tipo === 'bau') itens.push({ y: (e.y + 1) * TS, d: (c) => { const img = spriteObjeto(e.aberto ? 'bauA' : 'bauF'); c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round(e.y * TS + 16 - img.height / 2 - Rn.cam.y)); } });
+    else if (e.tipo === 'santuario') itens.push({ y: (e.y + 1) * TS, d: (c) => { const img = spriteObjeto('santuario', 0, Math.floor(tempo * 2.2) % 2); c.globalAlpha = e.usado ? 0.5 : 1; c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round(e.y * TS + 16 - img.height / 2 - Rn.cam.y)); c.globalAlpha = 1; } });
+    else if (e.tipo === 'tocha_cx') { if (!e.usado) itens.push({ y: (e.y + 1) * TS, d: (c) => { const img = spriteObjeto('caixaTocha'); c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round(e.y * TS + 16 - img.height / 2 - Rn.cam.y)); } }); }
+    else if (e.tipo === 'armadilha') { if (e.ativa && !e.oculta) itens.push({ y: e.y * TS + 4, d: (c) => { const img = spriteObjeto('armadilha'); c.drawImage(img, Math.round(e.x * TS + 16 - img.width / 2 - Rn.cam.x), Math.round(e.y * TS + 16 - img.height / 2 - Rn.cam.y)); } }); }
   }
   if (!bat) { const j = itemJogador(); if (j) itens.push({ ...j, y: (pyf + 1) * TS + 0.3 }); } else itens.push(...Ba.itens());
   Rn.desenharMas(ctx, d, { tempo, itens, vis: D.vis, raio: D.raio, jogador: { x: pxf, y: pyf }, T, antes: bat ? Ba.desenharAntes : null, depois: (c) => { Rn.desenharFlutuantes(c, flut); Rn.PART.desenhar(c, Rn.cam.x, Rn.cam.y); if (bat) Ba.desenharDepois(c); }, topo: (c) => { if (!bat) minimapa(c, d, s); } });

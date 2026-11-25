@@ -10,6 +10,8 @@ import { G } from './game.js';
 import * as Au from './audio.js';
 import { montarEditor } from './criador.js';
 import * as Camp from './campanha.js';
+import { QLUG } from './historia2.js';
+import { LUG } from './world.js';
 
 // ======================= MENU =======================
 registrar('menu', {
@@ -17,8 +19,8 @@ registrar('menu', {
   render() {
     const T = (id, em, n) => `<button class="tile" data-act="ir" data-id="${id}"><span class="em">${em}</span>${n}</button>`;
     const noVale = G.modo === 'vale', naMasmorra = G.modo === 'masmorra';
-    return `<p class="suave">Registre a vida real aqui, de qualquer lugar. As lojas e o templo ficam na vila.</p><div class="grade3">${T('arena', '🏋️', 'Arena de Ferro')}${T('trilha', '🏃', 'Trilha')}${T('biblioteca', '📚', 'Biblioteca')}${T('taverna', '🍖', 'Taverna')}${T('missoes', '📜', 'Missões')}${T('livro', '📖', 'Livro')}${T('diario', '🗺️', 'Diário')}${T('casa', '🏠', 'Casa / Ficha')}${T('ajuda', '❓', 'Como jogar')}</div>
-    ${noVale ? '<button class="btn bloco" data-act="vila">🏘️ Voltar para a vila</button>' : ''}${naMasmorra ? '<button class="btn ruim bloco" data-act="sair">🚪 Sair da masmorra</button>' : ''}`;
+    return `<p class="suave">Registre a vida real aqui, de qualquer lugar. As lojas e o templo ficam na vila.</p><div class="grade3">${T('arena', '🏋️', 'Arena de Ferro')}${T('trilha', '🏃', 'Trilha')}${T('biblioteca', '📚', 'Biblioteca')}${T('taverna', '🍖', 'Taverna')}${T('missoes', '📜', 'Missões')}${T('livro', '📖', 'Livro')}${T('diario', '🗺️', 'Diário')}${St.der().conj ? T('grimorio', '✨', 'Grimório') : ''}${T('casa', '🏠', 'Casa / Ficha')}${T('ajuda', '❓', 'Como jogar')}</div>
+    ${!naMasmorra ? '<div class="linha" style="gap:6px"><button class="btn bloco" data-act="ir" data-id="viagem">🧭 Viagem rápida</button><button class="btn bloco" data-act="ir" data-id="mapa">🗺️ Mapa do Vale</button></div>' : ''}${naMasmorra ? '<button class="btn ruim bloco" data-act="sair">🚪 Sair da masmorra</button>' : ''}`;
   },
   acoes: {
     ir: (el) => abrirPainel(el.dataset.id),
@@ -44,8 +46,8 @@ function abaFicha() {
 function abaEquip() {
   const s = S(); const slots = [['arma', 'Arma'], ['armadura', 'Armadura'], ['escudo', 'Escudo'], ['ac1', 'Acessório 1'], ['ac2', 'Acessório 2']];
   const inv = s.inv.filter((i) => ITENS[i.id]);
-  return `${casaMsg}<h3>Equipado</h3><div class="card">${slots.map(([k, n]) => `<div class="lista-item"><div class="nome">${n}: <b>${s.equip[k] ? esc(nomeItem(s.equip[k])) : '—'}</b>${s.equip[k] ? `<small>${esc(descItem(ITENS[s.equip[k]]))}</small>` : ''}</div>${s.equip[k] ? `<button class="btn peq" data-act="tirar" data-slot="${k}">Tirar</button>` : ''}</div>`).join('')}</div>
-  <h3>Mochila</h3>${inv.map((i) => { const it = ITENS[i.id]; const equip = ['arma', 'armadura', 'escudo', 'acessorio'].includes(it.tipo); const pode = !equip || St.podeEquipar(it); return `<div class="card"><h4><span>${esc(it.nome)} ${i.n > 1 ? '×' + i.n : ''}</span>${raridadeTag(it.raro)}</h4><p class="peq suave">${esc(descItem(it))}</p><div class="linha">${equip ? `<button class="btn peq pri" data-act="equipar" data-id="${i.id}" ${pode ? '' : 'disabled'}>${pode ? 'Equipar' : 'Classe não usa'}</button>` : `<button class="btn peq pri" data-act="usar" data-id="${i.id}">Usar</button>`}<button class="btn peq" data-act="vender" data-id="${i.id}">Vender (${Math.max(1, Math.round((it.preco || 10) * 0.4))} 🪙)</button></div></div>`; }).join('') || '<p class="suave">Mochila vazia. Treine, estude e abra baús!</p>'}
+  return `${casaMsg}<h3>Equipado</h3><div class="card">${slots.map(([k, n]) => `<div class="lista-item"><div class="nome">${n}: <b>${s.equip[k] ? icoItem(ITENS[s.equip[k]]) + esc(nomeItem(s.equip[k])) : '—'}</b>${s.equip[k] ? `<small>${esc(descItem(ITENS[s.equip[k]]))}</small>` : ''}</div>${s.equip[k] ? `<button class="btn peq" data-act="tirar" data-slot="${k}">Tirar</button>` : ''}</div>`).join('')}</div>
+  <h3>Mochila</h3>${inv.map((i) => { const it = ITENS[i.id]; const equip = ['arma', 'armadura', 'escudo', 'acessorio'].includes(it.tipo); const pode = !equip || St.podeEquipar(it); return `<div class="card"><h4><span>${icoItem(it)}${esc(it.nome)} ${i.n > 1 ? '×' + i.n : ''}</span>${raridadeTag(it.raro)}</h4><p class="peq suave">${esc(descItem(it))}</p><div class="linha">${equip ? `<button class="btn peq pri" data-act="equipar" data-id="${i.id}" ${pode ? '' : 'disabled'}>${pode ? 'Equipar' : 'Classe não usa'}</button>` : `<button class="btn peq pri" data-act="usar" data-id="${i.id}">Usar</button>`}<button class="btn peq" data-act="vender" data-id="${i.id}">Vender (${Math.max(1, Math.round((it.preco || 10) * 0.4))} 🪙)</button></div></div>`; }).join('') || '<p class="suave">Mochila vazia. Treine, estude e abra baús!</p>'}
   <h3>Capa do herói</h3><div class="card"><div class="linha" style="gap:6px">${Object.entries(CAPAS).map(([id, c]) => { const tem = s.heroi.capas.includes(id); return `<button class="btn peq ${s.heroi.capa === id ? 'pri' : ''}" style="border-left:10px solid ${c.c}" data-act="capa" data-id="${id}" ${tem ? '' : 'disabled'}>${tem ? '' : '🔒 '}${esc(c.nome)}</button>`; }).join('')}</div><p class="peq suave">Capas novas vêm de conquistas e rank.</p></div>`;
 }
 function abaConq() {
@@ -72,7 +74,8 @@ function tdeeTxt() {
 }
 registrar('casa', {
   titulo: 'Casa do Herói',
-  render() {
+  render(a) {
+    if (a && a.aba) casaAba = a.aba;
     const abas = [['ficha', 'Ficha'], ['ap', 'Aparência'], ['equip', 'Mochila'], ['conq', 'Conquistas'], ['config', 'Config']];
     return `<div class="abas">${abas.map(([k, n]) => `<button class="${casaAba === k ? 'sel' : ''}" data-act="aba" data-k="${k}">${n}</button>`).join('')}</div>${casaAba === 'ficha' ? abaFicha() : casaAba === 'ap' ? '<div id="ed-host"></div><p class="peq suave">As mudanças são salvas automaticamente. Raça e cosméticos não alteram a classe, mas a raça concede bônus de atributo.</p>' : casaAba === 'equip' ? abaEquip() : casaAba === 'conq' ? abaConq() : abaConfig()}`;
   },
@@ -110,7 +113,7 @@ registrar('livro', {
     <h4><span>🌑 Maré da Inércia</span><b>${H.inercia}/10</b></h4>${meter(H.inercia, 10, '')}<p class="peq suave">Sobe a cada dia sem atividade; desce com dias perfeitos. Em 7+ os monstros ganham força; em 10 o Rei acorda furioso. ${H.inercia >= 7 ? '<b class="verm">Cuidado!</b>' : ''}</p></div>
     ${fim ? `<div class="card" style="border-color:var(--ouro)"><h4><span>${esc(FINAIS[fim].nome)}</span></h4>${FINAIS[fim].txt.map((t) => `<p>${esc(t)}</p>`).join('')}<button class="btn pri bloco" data-act="ciclo">⏳ Laço do Tempo: recomeçar (+12% de dificuldade)</button><button class="btn bloco" data-act="explorador">🗝️ ${s.campanha.modo === 'explorador' ? 'Modo Explorador ativo' : 'Virar Explorador de Catacumbas'}</button></div>` : ''}
     <button class="btn bloco" data-act="prologo">📜 Reler o prólogo</button>
-    <h3>Capítulo atual</h3>${ativo ? (() => { const c = CAPITULOS[ativo - 1]; return `<div class="card" style="border-color:var(--brasa)"><h4><span>Cap. ${c.n} — ${esc(c.titulo)}</span></h4><p class="peq suave">${esc(ATOS[c.ato - 1].nome)} · ${esc(c.local)} · ${c.andares} andares${H.checkpoint[c.n] ? ` · checkpoint: andar ${H.checkpoint[c.n]}` : ''}</p>${linhasCap(c, H.flags).map((t) => `<p class="peq">${esc(t)}</p>`).join('')}<p class="peq suave">Chefe: <b>${esc(c.boss.nome)}</b>. ${G.modo === 'vila' ? 'Use o Portal ao norte ou ande até a caverna brilhante no Vale.' : 'Vá até a caverna brilhante no Vale.'}</p></div>`; })() : fim ? '<p class="suave">Todos os capítulos foram concluídos.</p>' : `<p class="suave">Nenhum capítulo disponível agora: suba de nível com a vida real!</p>`}
+    <h3>Capítulo atual</h3>${ativo ? (() => { const c = CAPITULOS[ativo - 1]; return `<div class="card" style="border-color:var(--brasa)"><h4><span>Cap. ${c.n} — ${esc(c.titulo)}</span></h4><p class="peq suave">${esc(ATOS[c.ato - 1].nome)} · ${esc(c.local)} · ${c.andares} andares${H.checkpoint[c.n] ? ` · checkpoint: andar ${H.checkpoint[c.n]}` : ''}</p>${linhasCap(c, H.flags).map((t) => `<p class="peq">${esc(t)}</p>`).join('')}<p class="peq suave">Chefe: <b>${esc(c.boss.nome)}</b>. ${G.modo === 'vila' ? 'Use o Portal ao norte ou abra o Mapa do Vale.' : 'Abra o Mapa do Vale e siga a entrada marcada com ❗.'}</p></div>`; })() : fim ? '<p class="suave">Todos os capítulos foram concluídos.</p>' : `<p class="suave">Nenhum capítulo disponível agora: suba de nível com a vida real!</p>`}
     <h3>Capítulos</h3>${CAPITULOS.map((c) => { const feito = H.limpos.includes(c.n), lock = c.n > s.heroi.nivel; const dec = H.decisoes[c.n]; return `<div class="lista-item" style="opacity:${lock ? 0.45 : 1}"><span class="fixo">${feito ? '✅' : lock ? '🔒' : c.n === ativo ? '➤' : '○'}</span><div class="nome"><b>${c.n}. ${esc(c.titulo)}</b><small>${esc(c.local)} · nível ${c.n}${feito && dec != null ? ` · escolha: ${esc(c.decisao.opcoes[dec].t)}` : ''}</small></div></div>`; }).join('')}`;
   },
   acoes: {
@@ -124,12 +127,13 @@ registrar('livro', {
 let diarioAba = 'missoes';
 registrar('diario', {
   titulo: 'Diário da Campanha',
-  render() {
+  render(a) {
+    if (a && a.aba) diarioAba = a.aba;
     const s = S(), C = s.campanha; const L = C.leitura;
     const abas = [['missoes', '📜 Missões'], ['baralho', '🃏 Baralho'], ['lore', '📖 Nhor']].map(([k, n]) => `<button class="btn ${diarioAba === k ? 'pri' : ''}" data-act="aba" data-id="${k}">${n}</button>`).join('');
     const nomeNpc = (id) => (Camp.PERSONAGENS[id] || { nome: '' }).nome;
     const cartaQuest = (q) => { const pr = Camp.progressoQuest(s, q); const feita = C.q[q.id].est === 'feita';
-      return `<div class="card" style="${feita ? 'opacity:.6' : q.tipo === 'principal' ? 'border-color:var(--ouro)' : ''}"><h4><span>${feita ? '✅' : q.tipo === 'principal' ? '⭐' : '🔹'} ${esc(q.titulo)}</span><small>${esc(nomeNpc(q.npc))}</small></h4><p class="peq suave">${esc(q.resumo)}</p>${feita ? '' : `<p class="peq"><b>Etapa ${pr.passo + 1}/${pr.de}:</b> ${esc(pr.txt)}</p><div class="prog"><i style="width:${pct(pr.a, pr.n)}%"></i></div><p class="peq suave">${Math.floor(pr.a)}/${pr.n}</p>`}</div>`; };
+      return `<div class="card" style="${feita ? 'opacity:.6' : q.tipo === 'principal' ? 'border-color:var(--ouro)' : ''}"><h4><span>${feita ? '✅' : q.tipo === 'principal' ? '⭐' : '🔹'} ${esc(q.titulo)}</span><small>${esc(nomeNpc(q.npc))}</small></h4>${(QLUG[q.id] || []).length ? `<p class="peq" style="color:var(--ouro)">📍 ${esc((QLUG[q.id] || []).map((kk) => (LUG[kk] || {}).nome).filter(Boolean).join(' → '))}</p>` : ''}<p class="peq suave">${esc(q.resumo)}</p>${feita ? '' : `<p class="peq"><b>Etapa ${pr.passo + 1}/${pr.de}:</b> ${esc(pr.txt)}</p><div class="prog"><i style="width:${pct(pr.a, pr.n)}%"></i></div><p class="peq suave">${Math.floor(pr.a)}/${pr.n}</p>`}</div>`; };
     let h = `<div style="display:flex;gap:6px;margin-bottom:8px">${abas}</div>`;
     if (diarioAba === 'missoes') {
       const at = Camp.ativas(s), fe = Camp.feitas(s); const bloqueadas = Camp.QUESTS.filter((q) => !C.q[q.id]);
@@ -164,7 +168,7 @@ function loja(id, lojaKey, titulo, mod = 1) {
       const s = S(); const est = R.estoqueLoja(s, lojaKey, s.diario.data);
       const comprar = est.map((iid) => { const it = ITENS[iid]; const p = R.precoItem(iid, s, mod); const equip = ['arma', 'armadura', 'escudo', 'acessorio'].includes(it.tipo); const pode = !equip || St.podeEquipar(it);
         return `<div class="card"><h4><span>${icoItem(it)}${esc(it.nome)}</span>${raridadeTag(it.raro)}</h4><p class="peq suave">${esc(descItem(it))}</p><button class="btn peq pri bloco" data-act="comprar" data-id="${iid}" ${s.heroi.ouro >= p && pode ? '' : 'disabled'}>${pode ? `Comprar — ${fmt(p)} 🪙` : 'Sua classe não usa'}</button></div>`; }).join('');
-      const vender = s.inv.filter((i) => ITENS[i.id] && ITENS[i.id].preco > 0).map((i) => { const it = ITENS[i.id]; return `<div class="lista-item"><div class="nome">${esc(it.nome)} ${i.n > 1 ? '×' + i.n : ''}<small>${esc(descItem(it))}</small></div><button class="btn peq" data-act="vender" data-id="${i.id}">${Math.max(1, Math.round(it.preco * 0.4))} 🪙</button></div>`; }).join('') || '<p class="suave">Nada para vender.</p>';
+      const vender = s.inv.filter((i) => ITENS[i.id] && ITENS[i.id].preco > 0).map((i) => { const it = ITENS[i.id]; return `<div class="lista-item"><div class="nome">${icoItem(it)}${esc(it.nome)} ${i.n > 1 ? '×' + i.n : ''}<small>${esc(descItem(it))}</small></div><button class="btn peq" data-act="vender" data-id="${i.id}">${Math.max(1, Math.round(it.preco * 0.4))} 🪙</button></div>`; }).join('') || '<p class="suave">Nada para vender.</p>';
       return `<p class="suave">Seu ouro: <b class="gold">${fmt(s.heroi.ouro)} 🪙</b> · Moral da vila ${s.historia.moral} → preços ${s.historia.moral >= 70 ? '−10%' : s.historia.moral >= 40 ? 'normais' : s.historia.moral >= 20 ? '+10%' : '+25%'}. O estoque muda todo dia.</p>
       <div class="abas"><button class="${aba === 'comprar' ? 'sel' : ''}" data-act="aba" data-k="comprar">Comprar</button><button class="${aba === 'vender' ? 'sel' : ''}" data-act="aba" data-k="vender">Vender</button></div>${aba === 'comprar' ? comprar : vender}`;
     },

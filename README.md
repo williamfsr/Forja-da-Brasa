@@ -44,8 +44,14 @@ Depois da primeira abertura o jogo roda sem internet.
 ### Combate tático (estilo D&D)
 
 - Iniciativa, **movimento por casas** (8 direções), ataques de oportunidade, flanco, linha de visão, alcance de armas e magias.
-- **Dano em área** com pré-visualização: bola de fogo, cones, linhas, correntes e fogo amigo. Toque uma vez para ver, de novo para confirmar.
+- **Dano em área** com pré-visualização: bola de fogo, cones, linhas, correntes e fogo amigo. Toque no inimigo (ou no **centro da área**) para mirar; o painel mostra quem será atingido e o botão **✦ Lançar** confirma. Tocar fora do alcance não cancela a magia.
 - Companheiros convertidos lutam ao seu lado. Arraste o mapa para olhar ao redor; ⌖ recentraliza.
+- **Magias do SRD 5.1 — todas as 283 das listas de classe** (20 truques + círculos 1–9), com efeito mecânico no combate:
+  dano e salvaguarda, **controle** (Imobilizar, Teia, Lentidão, Sono, Palavra de Poder, Aprisionamento…), **buffs** de verdade (CA, vantagem, resistências, PV temporários, Imagem Espelhada, Escudo de Fogo, Proteção contra a Morte, Aceleração, Voo…), **invocações** (Conjurar Animais/Elementais/Celestiais, Espírito Guardião, Arma Espiritual — entram na iniciativa e lutam por você), **muros** (Fogo, Gelo, Espinhos), **teletransporte** (Passo Nebuloso, Porta Dimensional), **dissipar/banir**, **ressurreição** de aliados caídos na mesma batalha, **Desejo** e a rede de magias sociais.
+- **Concentração** como no SRD: uma por vez; ao tomar dano há teste de CON (CD 10 ou metade do dano). Condições novas: maldito, enfraquecido, confuso, silenciado, banido.
+- **Grimório** (menu da vila): lista todas as magias da sua classe por círculo, mostra os espaços do dia e deixa conjurar fora de combate — **Alarme, Detectar Magia, Luz, Augúrio, Banquete de Heróis…** dão efeito de exploração ou ficam **prontas** (Armadura Arcana, Turvar, Proteção…) e entram em ação no começo da próxima batalha. No combate, o menu de magias tem filtro por círculo.
+- **Magias não dão XP**: o XP vem só de treino, estudo, aeróbico e alimentação. O custo é um espaço de magia, que volta conforme a alimentação do dia.
+- **Maestrias de arma (SRD 5.2.1):** Guerreiro, Bárbaro, Ladino e Paladino usam a maestria da arma equipada — **Fender, Esfolar, Entalhar, Empurrar, Minar, Desacelerar, Derrubar e Afligir**. A maestria aparece na descrição de cada arma.
 
 ### Inimigos e NPCs com personalidade
 
@@ -80,14 +86,39 @@ js/pessoa.js       gerador procedural de pessoas, retratos e armaduras · js/cos
 js/monstros.js · objetos.js · arte.js · gfx.js   arte procedural (monstros, objetos, terrenos)
 js/personalidade.js  temperamentos, frases e perfis de NPCs · js/encontros.js  grupos de inimigos
 js/criador.js      editor de aparência
-js/dungeon.js      gerador procedural de masmorras · js/world.js  vila e mapa-múndi
+js/dungeon.js      gerador procedural de masmorras · js/world.js  fachada dos mapas
+js/locais.js       biblioteca de construção de mapas (vista de cima), 23 interiores e registro de mapas · js/mundo.js  Forjaluz, vilas, Cidadela e o Vale de 104×80 casas
+js/vida.js         mundo vivo/morto (cor, árvores secas, cinzas, vagalumes) conforme a sua rotina
+js/conversa.js · js/historia2.js  cena de diálogo, árvores de conversa, falas de missão, visitas do Rei, sonhos, dádivas e Teo
+js/interacoes.js · js/paineis3.js  móveis/placas interativos · viagem rápida e Mapa do Vale
 js/game.js         loop, exploração, NPCs, masmorras e integração das batalhas
 js/ui*.js, paineis*.js   painéis (arena, trilha, biblioteca, taverna…)
 js/story.js        campanha nível 1–20, finais e consequências
-tools/             simulação de balanceamento (simtat, tunetat) e build do service worker
+js/campanha.js     missões (principais/secundárias), Diário de Nhor, Baralho do Hábito, relíquias e aliados · js/efeitos.js  animações JB2A em sprite
+js/maestrias.js    maestrias de arma (SRD 5.2.1) · js/bf.js  efeitos de buff/condição · js/grimorio.js  painel do Grimório
+js/dados/          itens, monstros e magias importados (gerados por tools/dados; magias_srd2.js = 203 magias com efeitos descritos em tools/dados/magias_spec.py)
+assets/            tokens (heróis, 340 criaturas), animações (fx), ícones de dano/condição (ic) e 48 ícones de item (ic/items)
+tools/             simulações (simtat, simsrd, simouro, simcampanha, simmagias, simmagias2, simmagias3, simmaestrias), importadores (tools/dados), geradores de arte (tools/arte) e build do service worker
 ```
 
 Testes de balanceamento do combate: `node tools/simtat.mjs`. Para regenerar o `sw.js` depois de mudar arquivos: `node tools/build.mjs`.
+
+## Mapa-múndi, interiores e viagem
+
+- Tudo em **vista de cima** (tiles de 32 px, sombras ao pé, telhados e fachadas). Tokens **sem moldura**: só o personagem.
+- **O Vale da Inércia** (104×80 casas): biomas com neblina que se dissipa conforme os capítulos, estradas, lagos, montanhas, aldeias, a **Cidadela do Trono Imóvel**, a Fortaleza Dracoprata, o Moinho dos Doces Sonhos, o Vinhedo do Brinde Eterno, o Templo Âmbar, o Brejo de Berez e as entradas de cada capítulo.
+  Mais **7 entradas de catacumbas aleatórias** espalhadas pelo mapa e baús diários. Toda masmorra devolve você ao ponto de onde saiu.
+- **Interiores interativos:** camas (descansar e *sonhar* com o Diário), espelho (aparência), baús, estantes, mesas, altares, placas e móveis com texto próprio. Aperte A em frente ao objeto.
+- **Teletransporte:** Marco das Viagens na praça e botões no menu levam para **sua casa**, a **vila** e qualquer lugar já visitado. **Mapa do Vale** no menu mostra neblina, capítulos, catacumbas e os pins das missões.
+- **Mundo vivo/morto:** quanto mais você treina, estuda, come bem e mantém a sequência, mais cor, folhas e vagalumes; parado, a Inércia sobe: tudo cinza, árvores secas, cinzas no ar. A mudança chega em **onda** a partir de onde você está.
+
+## Diálogos e o Rei da Inércia
+
+- **Cena de diálogo estilo RPG de turno clássico:** você à esquerda, o interlocutor à direita (sem moldura), caixa de texto e lista de opções com cursor ▶ (setas/WASD + Enter, ou toque). Só opções de fala.
+- **Sua personalização importa:** raça, marcas, acessórios, altura, classe e capa geram falas próprias em *Falar de mim…*, mudam como cada NPC reage e rendem **afinidade** (recompensas aos 3, 6 e 10 pontos).
+- Cada NPC tem tópicos (rumores do mapa, o passado do Rei, relações entre eles) e **falas de missão** que mudam entre ativa e concluída. NPCs com missão ativa ganham um **!** dourado.
+- **Visitas do Rei:** de tempos em tempos Nhor-Kaal aparece para conversar (6 encontros, de acordo com o seu nível) — recusar, perguntar ou ceder mexe com moral e Inércia. Os **sonhos** ao dormir em casa revelam as páginas do Diário. O **Templo Âmbar** oferece dádivas sem esforço; recusar três vezes abre o altar escondido. **Teo** só levanta se você se mexeu hoje.
+- A estrutura espelha, de forma original, a de um gótico-vampírico clássico: um mal que **conversa e observa**, vilas que negam o medo (Marcha-Lenta e sua festa), uma leitora de cartas (Safira e o Baralho), caçadores de monstros (Rictus, Calíope), uma fortaleza de cavaleiros amaldiçoados (Hornfel), um templo de dádivas, e o confronto no trono. Tudo gira em torno de **Nhor-Kaal** como o original gira em torno de seu vilão.
 
 ## Campanha, Diário e fim de jogo
 
@@ -97,16 +128,16 @@ Testes de balanceamento do combate: `node tools/simtat.mjs`. Para regenerar o `s
 - **XP só vem da vida real:** treino, aeróbico, estudo e alimentação (mais missões diárias/hábitos). Combate, chefes e masmorras dão ouro, itens e história, **não XP**.
 - Ao zerar a campanha você escolhe: **Laço do Tempo** (recomeça com monstros +12%) ou **Explorador de Catacumbas** (andares infinitos com todo o bestiário, até ND 30).
 - Itens: os **623 itens do SRD 5.1** (armas, armaduras, poções, itens mágicos) com preços por raridade, para o ouro não quebrar a progressão.
-- Combate com **animações** (golpes, flechas, feixes, bola de fogo, cura) e tokens de herói e de **340 criaturas** do SRD.
+- Combate com **animações** para cada ataque e magia (as 283 magias são classificadas por elemento e forma: projétil→explosão, cone, linha, corrente, muro, cura, escudos e condições) e tokens de herói e de **340 criaturas** do SRD. Cada item tem **ícone por categoria** (espada, machado, poção, anel, armadura…).
 
 ## Créditos e licenças
 
-- Regras: **System Reference Document 5.1**, © Wizards of the Coast LLC, licença **CC-BY-4.0**.
-  *This work includes material taken from the System Reference Document 5.1 by Wizards of the Coast LLC, licensed under CC-BY-4.0.*
+- Regras: **System Reference Document 5.1** e, para as maestrias de arma, **SRD 5.2.1**, © Wizards of the Coast LLC, licença **CC-BY-4.0**.
+  *This work includes material taken from the System Reference Document 5.1 and 5.2.1 by Wizards of the Coast LLC, licensed under CC-BY-4.0.*
 - Terminologia em português: tradução comunitária [dnd5e-pt-br](https://github.com/decito/dnd5e-pt-br) (decito, java3040, MagelaCE).
 - Código: MIT. História, personagens e arte pixel: originais. Detalhes em `LICENSE`.
 - Ícones de dano/itens/condições: **game-icons.net** e **The Noun Project**, licença **CC BY 3.0**, copiados do sistema dnd5e para Foundry VTT (MIT). Lista de autores em `assets/ic/CREDITOS.txt`.
 - Animações de combate (`assets/fx`): **JB2A — Jules & Ben's Animations** (versão gratuita), **CC BY-NC-SA 4.0** — https://www.jb2a.com. Uso **não comercial**; mantenha esta atribuição e a mesma licença para esses arquivos.
-- Tokens de heróis e monstros: **gerados proceduralmente por este projeto** (`tools/arte`). Os tokens da Forgotten Adventures/Caeora que acompanham o sistema dnd5e **não foram incluídos**: a licença deles restringe o uso ao Foundry VTT.
+- Tokens de heróis e monstros e **ícones de item por categoria**: **gerados proceduralmente por este projeto** (`tools/arte`). Os tokens da Forgotten Adventures/Caeora que acompanham o sistema dnd5e **não foram incluídos**: a licença deles restringe o uso ao Foundry VTT.
 - A campanha é uma **adaptação livre e original** inspirada na estrutura de um gótico-vampírico clássico; nenhum nome, texto ou mapa de obra protegida foi copiado.
 - Projeto de fã, sem afiliação com a Wizards of the Coast.

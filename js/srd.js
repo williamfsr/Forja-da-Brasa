@@ -1,6 +1,8 @@
 import { MONSTROS_SRD } from './dados/monstros_srd.js';
 import { aplicarPrecos } from './economia.js';
 import { ITENS_SRD } from './dados/itens_srd.js';
+import { MAGIAS_SRD } from './dados/magias_srd.js';
+import { MAGIAS_SRD2 } from './dados/magias_srd2.js';
 // Dados de regras baseados no SRD 5.1 (CC-BY-4.0, Wizards of the Coast) com a terminologia pt-BR
 // do módulo "Translation: Português (Brasil) [D&D 5E](SRD)". Valores adaptados para o jogo solo.
 
@@ -165,6 +167,8 @@ export const MAGIAS = {
   tempestade_fogo: { nome: 'Tempestade de Fogo', nv: 7, tipo: 'salva', atr: 'DES', dado: '7d10', dano: 'fogo', metade: true, cls: ['clerigo'], desc: 'Fogo caindo do céu.' },
   cura_total: { nome: 'Cura em Massa', nv: 9, tipo: 'cura', dado: '120', cls: ['clerigo'], desc: 'Cura 120 PV.' },
 };
+for (const m of MAGIAS_SRD) if (!MAGIAS[m.id]) MAGIAS[m.id] = { ...m, srd: 1 };
+for (const m of MAGIAS_SRD2) if (!MAGIAS[m.id]) MAGIAS[m.id] = { ...m, srd: 1 }; // magias do SRD 5.1 (dano, cura, controle, buffs)
 
 // ---------- Equipamento (nomes pt-BR do SRD) ----------
 // arma: dado, acu (acuidade), dist (distância), duas (duas mãos), mag (+bônus)

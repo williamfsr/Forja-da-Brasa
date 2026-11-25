@@ -1,6 +1,7 @@
 // Pequenos geradores de HTML reutilizados pelos painéis.
 import * as St from './store.js';
 import { ITENS } from './srd.js';
+import { MAESTRIAS, maestriaDe } from './maestrias.js';
 import { TIERS, TIER_COR, RAR_COR } from './conteudo.js';
 import { esc, fmt, pct } from './uibase.js';
 
@@ -8,13 +9,19 @@ export const S = () => St.S;
 export const tierTag = (t) => `<span class="tag" style="background:${TIER_COR[t]}">${esc(TIERS[t])}</span>`;
 export const escada = (tier) => `<div style="display:flex;gap:2px;margin:4px 0">${TIERS.map((n, i) => `<div title="${esc(n)}" style="flex:1;height:7px;border:1px solid #000;background:${i <= tier ? TIER_COR[i] : '#0a0812'}"></div>`).join('')}</div>`;
 export const barra = (a, b, cls = '') => `<div class="prog ${cls}"><i style="width:${pct(a, b).toFixed(1)}%"></i></div>`;
-const IC_TIPO = { arma: 'weapon', armadura: 'equipment', escudo: 'equipment', acessorio: 'equipment', consumivel: 'consumable', pocao: 'consumable', ferramenta: 'tool', tesouro: 'loot', pergaminho: 'consumable', bolsa: 'container' };
-// ícone (game-icons.net via dnd5e, CC BY 3.0) para a categoria do item; branco sobre transparente, tingido pela raridade
-export const icoItem = (it) => { const f = IC_TIPO[it && it.tipo] || (it && it.tipo === 'comida' ? 'consumable' : 'loot'); return `<img class="ico-item" alt="" src="assets/ic/items/${f}.webp" style="--rar:${RAR_COR[it && it.raro] || '#cfcfe0'}">`; };
+// ícone por categoria do item (arte procedural própria, assets/ic/items/*.webp); `ic` vem do SRD importado, os itens-base usam o mapa por id
+const IC_CATS = new Set(['espada', 'adaga', 'machado', 'martelo', 'maca', 'lanca', 'arco', 'funda', 'dardo', 'chicote', 'foice', 'cajado', 'bastao', 'varinha', 'flecha', 'escudo', 'armadura_leve', 'armadura_media', 'armadura_pesada', 'elmo', 'coroa', 'luvas', 'botas', 'capa', 'cinto', 'roupa', 'mochila', 'bolsa', 'saco', 'pocao', 'pergaminho', 'livro', 'chave', 'corda', 'tocha', 'lampiao', 'tenda', 'ferramenta', 'musica', 'gema', 'anel', 'amuleto', 'simbolo', 'sino', 'espelho', 'comida', 'veneno', 'padrao']);
+const IC_ID = { cajado: 'cajado', adaga: 'adaga', maca: 'maca', cimitarra: 'espada', espadaCurta: 'espada', machadinha: 'machado', rapieira: 'espada', machadoBatalha: 'machado', martelo: 'martelo', espadaLonga: 'espada', arcoCurto: 'arco', arcoLongo: 'arco', espadaGrande: 'espada', machadoGrande: 'machado', lamina_brasa: 'espada', lamina_solar: 'espada', cajado_poder: 'cajado', maca_disrupcao: 'maca',
+  couro: 'armadura_leve', couroBatido: 'armadura_leve', couro_lobo: 'armadura_leve', camisaoMalha: 'armadura_media', escamas: 'armadura_media', meiaPlaca: 'armadura_media', escama_dragao: 'armadura_media', cotaMalha: 'armadura_pesada', talas: 'armadura_pesada', placas: 'armadura_pesada', escudo: 'escudo',
+  anelProt: 'anel', mantoProt: 'capa', braceletes: 'luvas', manoplas: 'luvas', amuletoSaude: 'amuleto', tiara: 'coroa', periapto: 'amuleto', coroaCarisma: 'coroa', botasVel: 'botas', mantoElfico: 'capa', anelRegen: 'anel',
+  pocao1: 'pocao', pocao2: 'pocao', pocao3: 'pocao', pocao4: 'pocao', restaura: 'pocao', fogoAlq: 'pocao', pergBola: 'pergaminho', pergCura: 'pergaminho', poFuga: 'bolsa', escudoSeq: 'amuleto', amuletoCura: 'amuleto', simbolo_alvorecer: 'simbolo', diario_nhor: 'livro' };
+const IC_PADRAO = { arma: 'espada', armadura: 'armadura_media', escudo: 'escudo', acessorio: 'anel', consumivel: 'pocao', comida: 'comida', tesouro: 'saco' };
+export const catIcone = (it) => { if (!it) return 'padrao'; if (it.ic && IC_CATS.has(it.ic)) return it.ic; const base = String(it.id || '').replace(/_\d+$/, ''); return IC_ID[it.id] || IC_ID[base] || IC_PADRAO[it.tipo] || 'padrao'; };
+export const icoItem = (it) => `<img class="ico-item" alt="" loading="lazy" src="assets/ic/items/${catIcone(it)}.webp" style="--rar:${RAR_COR[it && it.raro] || '#cfcfe0'}">`;
 export const raridadeTag = (r) => `<span class="tag" style="background:${RAR_COR[r] || '#aaa'}">${esc(r)}</span>`;
 export function descItem(it) {
   if (!it) return '';
-  if (it.tipo === 'arma') return `${it.dado}${it.mag ? ` +${it.mag}` : ''}${it.duas ? ' · duas mãos' : ''}${it.dist ? ' · distância' : ''}${it.acu ? ' · acuidade' : ''}${it.extra ? ` · +${it.extra.dado} ${it.extra.dano}` : ''}${it.desc ? ' · ' + it.desc : ''}`;
+  if (it.tipo === 'arma') return `${it.dado}${it.mag ? ` +${it.mag}` : ''}${it.duas ? ' · duas mãos' : ''}${it.dist ? ' · distância' : ''}${it.acu ? ' · acuidade' : ''}${it.extra ? ` · +${it.extra.dado} ${it.extra.dano}` : ''}${maestriaDe(it) ? ` · Maestria: ${MAESTRIAS[maestriaDe(it)].nome}` : ''}${it.desc ? ' · ' + it.desc : ''}`;
   if (it.tipo === 'armadura') return `CA ${it.base + (it.mag || 0)}${it.dexMax === 0 ? '' : it.dexMax >= 90 || it.dexMax == null ? ' + DES' : ` + DES (máx. ${it.dexMax})`} · ${it.cat}${it.desc ? ' · ' + it.desc : ''}`;
   if (it.tipo === 'escudo') return `+${(it.ca || 0) + (it.mag || 0)} CA`;
   return it.desc || '';

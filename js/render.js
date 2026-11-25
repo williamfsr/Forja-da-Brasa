@@ -3,7 +3,7 @@ import { TS, assarExterno, assarMasmorra, spriteObjeto, ehObjeto, aplicarEscurid
 import { spritePessoa } from './pessoa.js';
 import { spriteMonstro, TAMANHO_SPR } from './monstros.js';
 import { texto, hash2 } from './gfx.js';
-import { PREDIOS } from './world.js';
+
 import { ITENS } from './srd.js';
 import { CAPAS } from './conteudo.js';
 import { visualDe } from './pessoa.js';
@@ -94,9 +94,27 @@ export function prepararExterno(m) {
   if (m.arte) return m.arte; const { canvas, base } = assarExterno(m); const linhas = Array.from({ length: m.h + 4 }, () => []);
   const eh = (x, y, id) => x >= 0 && y >= 0 && x < m.w && y < m.h && m.g[y * m.w + x] === id;
   for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) { const id = m.g[y * m.w + x]; if (!ehObjeto(id)) continue;
-    const viz = id === 'cerca' ? { h: eh(x - 1, y, 'cerca') || eh(x + 1, y, 'cerca'), v: eh(x, y - 1, 'cerca') || eh(x, y + 1, 'cerca') } : {}; if (id === 'arvore' && hash2(x, y, 5) < 0.18) viz.outono = true;
-    linhas[y].push({ id, x, y, v: Math.floor(hash2(x, y, 3) * 4), viz }); }
+    const viz = { n: eh(x, y - 1, id), s: eh(x, y + 1, id), w: eh(x - 1, y, id), e: eh(x + 1, y, id) }; viz.h = viz.w || viz.e; viz.v = viz.n || viz.s; if (id === 'cerca' && !viz.h && !viz.v) viz.h = true; if (id === 'arvore' && hash2(x, y, 5) < 0.18) viz.outono = true;
+    const o = { id, x, y, v: Math.floor(hash2(x, y, 3) * 4), viz }; if (id === 'arvore') { o.lim = hash2(x, y, 11); o.vizM = { ...viz, morta: true, outono: false }; } linhas[y].push(o); }
   m.arte = { canvas, base, linhas }; return m.arte;
+}
+// ---------- mundo vivo/morto: cor, secura e a onda que muda o mundo ----------
+export const fracMorta = (v) => Math.max(0, Math.min(1, (0.62 - v) / 0.5));
+function gradeUnica(ctx, v, forca) {
+  const k = Math.max(0, Math.min(1, 1 - v)) * forca; const W = VW.w, H = VW.h; ctx.save();
+  if (k >= 0.02) {
+    ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = Math.min(0.92, k * 1.15); ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 0.08 + k * 0.34; ctx.fillStyle = `rgb(${Math.round(150 - 108 * k)},${Math.round(104 - 58 * k)},${Math.round(44 + 28 * k)})`; ctx.fillRect(0, 0, W, H);
+    const gr = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.22, W / 2, H / 2, Math.max(W, H) * 0.7); gr.addColorStop(0, 'rgba(8,6,16,0)'); gr.addColorStop(1, `rgba(8,6,16,${(k * 0.72).toFixed(3)})`); ctx.globalAlpha = 1; ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+  } else if (v > 0.78) { ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = Math.min(0.5, (v - 0.78) * 2.4); ctx.fillStyle = '#ffd47a'; ctx.fillRect(0, 0, W, H); }
+  ctx.restore();
+}
+function gradearMundo(ctx, vd, forca) {
+  const o = vd.onda; if (!o) { gradeUnica(ctx, vd.v, forca); return; }
+  const cx = o.x - cam.x, cy = o.y - cam.y, Rmax = Math.hypot(VW.w, VW.h) * 1.05, R = Math.max(1, o.t * Rmax), W = VW.w, H = VW.h;
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.arc(cx, cy, R, 0, 6.2832); ctx.clip('evenodd'); gradeUnica(ctx, o.velho, forca); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.clip(); gradeUnica(ctx, o.novo, forca); ctx.restore();
+  const melhora = o.novo > o.velho; ctx.save(); ctx.globalAlpha = Math.max(0, 0.8 - o.t * 0.7); ctx.lineWidth = 3; ctx.strokeStyle = melhora ? '#ffe27a' : '#8a7ac8'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.stroke(); ctx.lineWidth = 1; ctx.strokeStyle = melhora ? '#b8ff8a' : '#c8c0ff'; ctx.beginPath(); ctx.arc(cx, cy, Math.max(0.1, R - 4), 0, 6.2832); ctx.stroke(); ctx.restore();
 }
 let tintCache = { t: 0, v: null };
 function tintHora() { const n = Date.now(); if (n - tintCache.t < 20000 && tintCache.v !== undefined) return tintCache.v; const d = new Date(), h = d.getHours() + d.getMinutes() / 60; let v = null; if (h >= 20.5 || h < 5) v = 'rgba(14,20,86,0.36)'; else if (h >= 18) v = 'rgba(255,120,40,0.15)'; else if (h < 7) v = 'rgba(255,170,90,0.10)'; tintCache = { t: n, v }; return v; }
@@ -111,17 +129,18 @@ export function desenharExterno(ctx, m, opc) {
   // objetos altos + entidades por profundidade
   const lista = []; const f = Math.floor(tempo * 2.2) % 2;
   for (let y = Math.max(0, y0 - 1); y <= Math.min(m.h + 3, y1 + 3); y++) for (const o of A.linhas[y] || []) { if (o.x < x0 - 2 || o.x > x1 + 2) continue;
-    if (o.id === 'caverna' || o.id === 'cavernaLiv') continue; lista.push({ y: (o.y + 1) * TS, d: () => { const img = spriteObjeto(o.id, o.v, f, o.viz); ctx.drawImage(img, Math.round(o.x * TS + 16 - img.width / 2 - cam.x), Math.round((o.y + 1) * TS - img.height - cam.y)); } }); }
-  if (opc.caps) for (const c of opc.caps) { if (c.x < x0 - 2 || c.x > x1 + 2 || c.y < y0 - 2 || c.y > y1 + 3) continue; lista.push({ y: (c.y + 1) * TS, d: () => { const img = spriteObjeto(c.ativo ? 'cavernaLiv' : 'caverna', 0, f, {}); const px = Math.round(c.x * TS + 16 - img.width / 2 - cam.x), py = Math.round((c.y + 1) * TS - img.height - cam.y); ctx.drawImage(img, px, py);
-    if (c.ativo) texto(ctx, '!', px + img.width / 2, py - 5 + Math.round(Math.sin(tempo * 5) * 2), { cor: '#6af0ff', tam: 10 }); else texto(ctx, String(c.n), px + img.width / 2, py + img.height / 2, { cor: c.limpo ? '#6fcf7f' : '#a8a8b8', tam: 8 }); } }); }
-  for (const e of opc.itens || []) lista.push(e);
+    if (o.id === 'caverna' || o.id === 'cavernaLiv' || (m.capPos && m.capPos.has(o.y * m.w + o.x))) continue; lista.push({ y: o.y * TS + 4, d: () => { const img = spriteObjeto(o.id, o.v, f, (o.lim !== undefined && opc.vida && o.lim < fracMorta(opc.vida.v)) ? o.vizM : o.viz); ctx.drawImage(img, Math.round(o.x * TS + 16 - img.width / 2 - cam.x), Math.round(o.y * TS + 16 - img.height / 2 - cam.y)); } }); }
+  if (opc.caps) for (const c of opc.caps) { if (c.x < x0 - 2 || c.x > x1 + 2 || c.y < y0 - 2 || c.y > y1 + 3) continue; lista.push({ y: c.y * TS + 4, d: () => { const img = spriteObjeto(c.cata ? 'caverna' : (c.spr && c.spr !== 'caverna') ? c.spr : (c.ativo ? 'cavernaLiv' : 'caverna'), 0, f, {}); const px = Math.round(c.x * TS + 16 - img.width / 2 - cam.x), py = Math.round(c.y * TS + 16 - img.height / 2 - cam.y); ctx.drawImage(img, px, py);
+    if (c.cata) texto(ctx, '∞', px + img.width / 2, py + img.height / 2 + 1, { cor: '#c8b6ff', tam: 9 }); else if (c.ativo) texto(ctx, '!', px + img.width / 2, py - 2 + Math.round(Math.sin(tempo * 5) * 2), { cor: '#6af0ff', tam: 10 }); else texto(ctx, String(c.n), px + img.width / 2, py + img.height / 2, { cor: c.limpo ? '#6fcf7f' : '#a8a8b8', tam: 8 }); } }); }
   lista.sort((a, b) => a.y - b.y); for (const e of lista) e.d(ctx);
+  if (opc.vida) gradearMundo(ctx, opc.vida, m.interior ? 0.55 : opc.batalha ? 0.5 : 1);
+  const ents = (opc.itens || []).slice().sort((a, b) => a.y - b.y); for (const e of ents) e.d(ctx);
   if (opc.depois) opc.depois(ctx);
-  // rótulos dos prédios
-  if (opc.vila) for (const p of PREDIOS) { const cxp = Math.round((p.x + p.w / 2) * TS - cam.x), cyp = Math.round(p.y * TS - cam.y - 3); if (cxp > -80 && cxp < VW.w + 80 && cyp > -10 && cyp < VW.h + 10) texto(ctx, p.nome, cxp, cyp, { cor: '#fff', tam: 8 }); }
+  // rótulos de lugares (prédios, vilas, entradas)
+  for (const t of m.rotulos || []) { const cxp = Math.round((t.x + 0.5) * TS - cam.x), cyp = Math.round(t.y * TS - cam.y - 3); if (cxp > -90 && cxp < VW.w + 90 && cyp > -12 && cyp < VW.h + 12) texto(ctx, t.t, cxp, cyp, { cor: t.int ? '#ffe9a8' : t.reg ? '#e8e0ff' : '#fff', tam: t.reg ? 7 : 8 }); }
   // névoa do Vale: regiões além do capítulo ativo
   if (opc.vale) { const { reg, lim } = opc.vale; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const r = reg[y * m.w + x]; if (r > lim) { ctx.fillStyle = `rgba(10,8,22,${Math.min(0.9, 0.5 + (r - lim) * 0.06)})`; ctx.fillRect(x * TS - cam.x, y * TS - cam.y, TS, TS); } } }
-  const tint = tintHora(); if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, VW.w, VW.h); }
+  const tint = m.interior ? m.tint : tintHora(); if (tint) { ctx.fillStyle = tint; ctx.fillRect(0, 0, VW.w, VW.h); }
   if (opc.topo) opc.topo(ctx);
 }
 

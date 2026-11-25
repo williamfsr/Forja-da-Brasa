@@ -15,11 +15,19 @@ const cv = (w, h = w) => { const c = document.createElement('canvas'); c.width =
 
 // ---------- pré-carga ----------
 export function precarregarHeroi() {
-  const n = ['sombra', 'base', 'braco', 'capa_curta', 'capa_longa', 'escudo_1', 'escudo_2', 'escudo_3', 'presas', 'cabeca_dragao', 'orelha_longa', 'orelha_pequena', 'orelha_pontuda', 'orelha_redonda'];
+  const n = ['braco', 'capa_curta', 'capa_longa', 'escudo_1', 'escudo_2', 'escudo_3', 'presas', 'cabeca_dragao', 'orelha_longa', 'orelha_pequena', 'orelha_pontuda', 'orelha_redonda'];
   for (let i = 0; i < 6; i++) n.push('cabeca_' + i); for (let i = 0; i < 4; i++) n.push('chifre_' + i); for (let i = 1; i < 24; i++) n.push('cabelo_' + i); for (let i = 1; i < 12; i++) n.push('barba_' + i); for (let i = 1; i < 10; i++) n.push('acess_' + i);
   for (const k of [1, 2]) { for (let i = 0; i < 8; i++) n.push(`roupa_${i}_${k}`); for (const t of ['couro', 'escamas', 'malha', 'placa']) n.push(`peito_${t}_${k}`); for (const o of ['capuz', 'chifre', 'pontudo', 'redondo']) n.push(`ombro_${o}_${k}`); for (const e of ['aberto', 'capuz', 'chapeu', 'chifres', 'coroa', 'crista', 'fechado']) n.push(`elmo_${e}_${k}`); }
   for (const a of ['adaga', 'arcoCurto', 'arcoLongo', 'cajado', 'cimitarra', 'espadaCurta', 'espadaGrande', 'espadaLonga', 'maca', 'machadinha', 'machadoBatalha', 'machadoGrande', 'martelo', 'rapieira']) n.push('arma_' + a);
   for (const x of n) carregar(`${BASE}heroi/${x}.webp`);
+}
+
+
+// Sombra projetada pela própria silhueta (sem moldura, sem disco): o token é só o personagem.
+export function comSombraSilhueta(src, dx = 4, dy = 5, a = 0.32) {
+  const w = src.width, h = src.height, o = cv(w, h), x = o.getContext('2d'); const s = cv(w, h), sc = s.getContext('2d');
+  sc.drawImage(src, 0, 0); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = `rgba(8,5,16,${a})`; sc.fillRect(0, 0, w, h);
+  x.drawImage(s, dx, dy); x.drawImage(src, 0, 0); return o;
 }
 
 // ---------- herói / NPC por camadas ----------
@@ -43,7 +51,7 @@ export function armaDeItem(it) {
 }
 function camadas(ap, vis, arma) {
   const R = RACAS[ap.raca] || RACAS.humano; const L = []; const kit = kitDe(ap, vis); const add = (n, cor, larg) => L.push([n, cor || null, !!larg]);
-  add('sombra'); add('base', ap.roupa1);
+  
   if (ap.capa) add('capa_' + (ap.capa === 1 ? 'curta' : 'longa'), vis.capaC || '#7a1f1a', true);
   add('braco', ap.pele, true); const ro = (ap.roupa | 0) % 8; add(`roupa_${ro}_1`, ap.roupa1, true); add(`roupa_${ro}_2`, ap.roupa2, true);
   if (kit) {
@@ -69,12 +77,12 @@ export function tokenPessoa(ap, vis = {}, arma = null) {
   const hit = cacheHeroi.get(chave); if (hit) return hit;
   const es = lista.map(([n, cor, larg]) => [carregar(`${BASE}heroi/${n}.webp`), cor, larg]);
   if (es.some(([e]) => !e.ok && !e.erro)) return null;
-  const out = cv(128), x = out.getContext('2d'); const sx = 0.9 + (ap.corpo | 0) * 0.08 + ((RACAS[ap.raca] || {}).larg || 0) * 0.008;
+  const corpo = cv(128), cx = corpo.getContext('2d'); const sx = 0.9 + (ap.corpo | 0) * 0.08 + ((RACAS[ap.raca] || {}).larg || 0) * 0.008;
   for (const [e, cor, larg] of es) {
     if (!e.ok) continue; let im = cor ? tingir(e.img, cor) : e.img;
-    if (larg && sx !== 1) { const w = Math.round(128 * sx); x.drawImage(im, (128 - w) / 2, 0, w, 128); } else x.drawImage(im, 0, 0);
+    if (larg && sx !== 1) { const w = Math.round(128 * sx); cx.drawImage(im, (128 - w) / 2, 0, w, 128); } else cx.drawImage(im, 0, 0);
   }
-  if (cacheHeroi.size > 200) cacheHeroi.clear(); cacheHeroi.set(chave, out); return out;
+  const out = comSombraSilhueta(corpo); if (cacheHeroi.size > 200) cacheHeroi.clear(); cacheHeroi.set(chave, out); return out;
 }
 // Token do herói jogável a partir do estado (usa a arma equipada).
 export function tokenHeroi(s, ap, vis, itens) { return tokenPessoa(ap, vis, armaDeItem(itens[s.equip && s.equip.arma])); }
@@ -91,7 +99,8 @@ export function idToken(m) { // m: unidade/monstro com { tok, mon|id }
   if (!m) return null; if (m.tok) return String(m.tok).replace(/^s_/, ''); const id = m.mon || m.id; if (!id) return null; if (/^s_/.test(id)) return id.slice(2); return VELHO[id] || null;
 }
 export function tokenMonstro(m) {
-  const id = idToken(m); if (!id) return null; const e = carregar(`${BASE}mon/${id}.webp`); return e.ok ? e.img : null;
+  const id = idToken(m); if (!id) return null; const e = carregar(`${BASE}mon/${id}.webp`); if (!e.ok) return null;
+  if (!e.sombra) e.sombra = comSombraSilhueta(e.img); return e.sombra;
 }
 export function precarregarMonstros(ids) { for (const i of ids) carregar(`${BASE}mon/${String(i).replace(/^s_/, '')}.webp`); }
 

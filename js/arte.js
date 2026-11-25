@@ -1,6 +1,7 @@
 // Cenários em 32 bits: texturas de chão sem emenda, transições suaves entre terrenos, paredes, luz e partículas.
 import { Pix, rampa, mistura, escurece, clareia, hash2, clamp, cv } from './gfx.js';
 import * as O from './objetos.js';
+import * as TD from './topdown.js';
 
 export const TS = 32;
 const per = (x, y, p, s) => { const w = (i) => ((i % p) + p) % p; const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy); const a = hash2(w(x0), w(y0), s), b = hash2(w(x0 + 1), w(y0), s), c = hash2(w(x0), w(y0 + 1), s), d = hash2(w(x0 + 1), w(y0 + 1), s); return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
@@ -49,9 +50,11 @@ const bordaCache = new Map();
 function borda(Bid, lado, mv, tv, forca) { const k = Bid + lado + mv + tv + forca; let c = bordaCache.get(k); if (c) return c; c = cv(32, 32); const x = c.getContext('2d'); x.drawImage(texFlor(Bid, tv), 0, 0); x.globalCompositeOperation = 'destination-in'; x.drawImage(mascara(lado, mv, forca), 0, 0); bordaCache.set(k, c); return c; }
 
 // ---------- mapas externos (vila e vale): chão assado ----------
-const CHAO_IDS = new Set(['grama', 'flor', 'terra', 'estrada', 'caminho', 'praca', 'agua', 'areia', 'neve', 'pantano', 'nuvem', 'lava', 'ponte']);
-const OBJ_ALTOS = new Set(['arvore', 'pinheiro', 'montanha', 'rocha', 'placa', 'barril', 'bigorna', 'braseiro', 'poco', 'tenda', 'cerca', 'casinha', 'caverna', 'cavernaLiv', 'saida', 'arvoreFixa', 'bau_mundo', 'bauF', 'bauA']);
-const PREDIO_IDS = new Set(['telhado', 'telhadoAz', 'telhadoVd', 'parede', 'paredeLisa', 'porta']);
+const CHAO_IDS = new Set(['grama', 'flor', 'terra', 'estrada', 'caminho', 'praca', 'agua', 'areia', 'neve', 'pantano', 'nuvem', 'lava', 'ponte', 'piso', 'pisoPedra', 'pisoMarm', 'pisoEscuro', 'pisoTerra', 'tapete']);
+const INT_PAREDES = new Set(['paredeI', 'paredeP', 'janela']);
+const OBJ_ALTOS = new Set(['arvore', 'pinheiro', 'montanha', 'rocha', 'placa', 'barril', 'bigorna', 'braseiro', 'poco', 'tenda', 'cerca', 'casinha', 'caverna', 'cavernaLiv', 'saida', 'arvoreFixa', 'bau_mundo', 'bauF', 'bauA', 'muro', 'torreT', ...TD.MOBILIA_TIPOS]);
+const PREDIO_IDS = new Set([...TD.TELHADOS, 'parede', 'paredeLisa', 'porta']);
+const objCache = new Map();
 export const ehObjeto = (id) => OBJ_ALTOS.has(id);
 function tipoChao(m, x, y, pad = 'grama') {
   const id = m.g[y * m.w + x]; if (CHAO_IDS.has(id)) return id;
@@ -66,6 +69,14 @@ export function assarExterno(m, opcoes = {}) {
   for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) {
     const t = base[j * m.w + i], g = grupo(t), v = Math.floor(hash2(i, j, 7) * 4); const px = i * TS, py = j * TS; const id = m.g[j * m.w + i];
     if (PREDIO_IDS.has(id)) { x.drawImage(texChao('grama', v), px, py); continue; }
+    if (id === 'portaI') { x.drawImage(TD.pisoInt('piso', 0), px, py); x.drawImage(TD.porta(), px, py); continue; }
+    if (INT_PAREDES.has(id)) { const W = (a, b) => { if (a < 0 || b < 0 || a >= m.w || b >= m.h) return true; return INT_PAREDES.has(m.g[b * m.w + a]); }; const viz = { n: W(i, j - 1), s: W(i, j + 1), w: W(i - 1, j), e: W(i + 1, j) }; const kk = `pi${id}${viz.n ? 1 : 0}${viz.s ? 1 : 0}${viz.w ? 1 : 0}${viz.e ? 1 : 0}`; let im = objCache.get(kk); if (!im) { im = id === 'janela' ? TD.janelaInt() : TD.paredeInt(viz, id === 'paredeP' ? 'pedra' : 'madeira'); objCache.set(kk, im); } x.drawImage(im, px, py); continue; }
+    if (TD.PISOS[t] || id === 'tapete') { const vi = id === 'tapete' ? (() => { const E = (a, b) => a >= 0 && b >= 0 && a < m.w && b < m.h && m.g[b * m.w + a] === 'tapete'; return { n: E(i, j - 1), s: E(i, j + 1), w: E(i - 1, j), e: E(i + 1, j) }; })() : null; const kk = `pt${t}${v % 2}${vi ? `${vi.n ? 1 : 0}${vi.s ? 1 : 0}${vi.w ? 1 : 0}${vi.e ? 1 : 0}${m.tapeteCor || ''}` : ''}`; let im = objCache.get(kk); if (!im) { im = vi ? TD.tapete(vi, m.tapeteCor || '#a83a3a') : TD.pisoInt(t, v % 2); objCache.set(kk, im); } x.drawImage(im, px, py);
+      const eP = (a, b) => a < 0 || b < 0 || a >= m.w || b >= m.h || INT_PAREDES.has(m.g[b * m.w + a]);
+      if (eP(i, j - 1)) { const g = x.createLinearGradient(0, py, 0, py + 10); g.addColorStop(0, 'rgba(8,6,16,0.5)'); g.addColorStop(1, 'rgba(8,6,16,0)'); x.fillStyle = g; x.fillRect(px, py, 32, 10); }
+      if (eP(i - 1, j)) { const g = x.createLinearGradient(px, 0, px + 8, 0); g.addColorStop(0, 'rgba(8,6,16,0.4)'); g.addColorStop(1, 'rgba(8,6,16,0)'); x.fillStyle = g; x.fillRect(px, py, 8, 32); }
+      if (eP(i + 1, j)) { const g = x.createLinearGradient(px + 32, 0, px + 24, 0); g.addColorStop(0, 'rgba(8,6,16,0.4)'); g.addColorStop(1, 'rgba(8,6,16,0)'); x.fillStyle = g; x.fillRect(px + 24, py, 8, 32); }
+      continue; }
     x.drawImage(texFlor(t, v), px, py);
     const pa = PRI[g] ?? 8; if (pa >= 99) { if (g === 'ponte') { /* trilhos para a água */ } continue; }
     const viz = { n: at(i, j - 1), s: at(i, j + 1), w: at(i - 1, j), e: at(i + 1, j) };
@@ -76,28 +87,19 @@ export function assarExterno(m, opcoes = {}) {
   }
   // praça e pontes: borda de pedra
   for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) { const id = m.g[j * m.w + i]; if (id === 'praca') { x.fillStyle = 'rgba(20,16,30,0.25)'; if (at(i, j + 1) !== 'praca' && !PREDIO_IDS.has(m.g[(j + 1) * m.w + i])) x.fillRect(i * TS, j * TS + 30, TS, 2); if (at(i, j - 1) !== 'praca') x.fillRect(i * TS, j * TS, TS, 1); } if (id === 'ponte') { x.fillStyle = '#3a2814'; if (m.g[(j - 1) * m.w + i] !== 'ponte' && m.g[(j - 1) * m.w + i] !== 'estrada') x.fillRect(i * TS, j * TS, TS, 3); } }
-  // prédios (assados no chão: telhado, parede, porta com ligações)
-  const eh = (i, j, ids) => i >= 0 && j >= 0 && i < m.w && j < m.h && ids.includes(m.g[j * m.w + i]);
-  const TELH = ['telhado', 'telhadoAz', 'telhadoVd'], COR = { telhado: '#b4442c', telhadoAz: '#3a5ab4', telhadoVd: '#3a8a4a' };
-  for (let j = 0; j < m.h; j++) for (let i = 0; i < m.w; i++) { const id = m.g[j * m.w + i]; if (!PREDIO_IDS.has(id)) continue; let img;
-    if (TELH.includes(id)) img = O.telhado(COR[id], !eh(i, j - 1, TELH), !eh(i - 1, j, TELH), !eh(i + 1, j, TELH));
-    else if (id === 'porta') img = O.portaPredio(); else img = O.paredePredio(id === 'parede', !eh(i - 1, j, ['parede', 'paredeLisa', 'porta']), !eh(i + 1, j, ['parede', 'paredeLisa', 'porta']));
-    x.drawImage(img, i * TS, j * TS);
-    if (id === 'parede' || id === 'paredeLisa' || id === 'porta') { x.fillStyle = 'rgba(20,16,30,0.22)'; x.fillRect(i * TS, j * TS + 32, TS, 3); }
-    if (TELH.includes(id) && !eh(i, j + 1, TELH)) { x.fillStyle = 'rgba(20,16,30,0.3)'; x.fillRect(i * TS, j * TS + 32, TS, 6); }
-  }
+  // prédios vistos de cima: sombra no chão, telhado com cumeeira e a porta (degrau + tapete)
+  for (const b of m.predios || []) { x.fillStyle = 'rgba(10,6,20,0.30)'; x.fillRect(b.x * TS + 5, b.y * TS + 7, b.w * TS, b.h * TS); x.drawImage(TD.predio(b.w, b.h, b.tel || 'telhado', b.ruina), b.x * TS, b.y * TS); if (b.porta) x.drawImage(TD.porta(), b.porta.x * TS, b.porta.y * TS); }
   void opcoes; return { canvas: c, base };
 }
-const objCache = new Map();
 export function spriteObjeto(id, v = 0, f = 0, viz = {}) {
-  const k = id + v + ':' + f + ':' + (viz.h ? 1 : 0) + (viz.v ? 1 : 0); let c = objCache.get(k); if (c) return c;
+  const k = id + v + ':' + f + ':' + (viz.h ? 1 : 0) + (viz.v ? 1 : 0) + (viz.n ? 1 : 0) + (viz.s ? 1 : 0) + (viz.w ? 1 : 0) + (viz.e ? 1 : 0) + (viz.outono ? 'o' : '') + (viz.morta ? 'm' : ''); let c = objCache.get(k); if (c) return c;
   switch (id) {
-    case 'arvore': case 'arvoreFixa': c = O.arvore(v, viz.outono); break; case 'pinheiro': c = O.pinheiro(v); break; case 'montanha': c = O.montanha(true, v); break; case 'rocha': c = O.rocha(v); break;
-    case 'placa': c = O.placa(); break; case 'barril': c = O.barril(); break; case 'bigorna': c = O.bigorna(); break; case 'braseiro': c = O.braseiro(f); break; case 'poco': c = O.poco(); break; case 'tenda': c = O.tenda(); break;
-    case 'cerca': c = O.cerca(viz.h, viz.v); break; case 'casinha': c = O.casinha(); break; case 'caverna': c = O.caverna(false, f); break; case 'cavernaLiv': c = O.caverna(true, f % 2); break; case 'saida': c = O.portal(f); break;
-    case 'bau_mundo': case 'bauF': c = O.bau(false); break; case 'bauA': c = O.bau(true, '#8a5a30', true); break;
-    case 'santuario': c = O.santuario(f); break; case 'armadilha': c = O.armadilha(true); break; case 'caixaTocha': c = O.caixaTocha(); break;
-    default: c = O.rocha(v);
+    case 'arvore': case 'arvoreFixa': c = TD.arvore(v, viz.outono, viz.morta); break; case 'pinheiro': c = TD.pinheiro(v); break; case 'montanha': c = TD.montanha(true, v); break; case 'rocha': c = TD.rocha(v); break;
+    case 'placa': c = TD.placa(); break; case 'barril': c = TD.barril(); break; case 'bigorna': c = TD.bigorna(); break; case 'braseiro': c = TD.braseiro(f); break; case 'poco': c = TD.poco(); break; case 'tenda': c = TD.tenda(); break;
+    case 'cerca': c = TD.cerca(viz.h, viz.v); break; case 'casinha': c = TD.casinha(); break; case 'caverna': c = TD.caverna(false, f); break; case 'cavernaLiv': c = TD.caverna(true, f % 2); break; case 'saida': c = TD.portal(f); break;
+    case 'bau_mundo': case 'bauF': c = TD.bau(false); break; case 'bauA': c = TD.bau(true, '#8a5a30', true); break;
+    case 'santuario': c = TD.santuario(f); break; case 'armadilha': c = TD.armadilha(true); break; case 'caixaTocha': c = TD.caixaTocha(); break; case 'muro': c = TD.muro(viz); break; case 'torreT': c = TD.torre(); break;
+    default: c = TD.MOBILIA_TIPOS.includes(id) ? TD.mobilia(id, v, f, viz) : TD.rocha(v);
   }
   objCache.set(k, c); return c;
 }
@@ -129,9 +131,10 @@ export function assarMasmorra(d, tema, T = { PAREDE: 0, CHAO: 1, DESCE: 2, SOBE:
   for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) {
     const t = IT(i, j), px = i * TS, py = j * TS, v = Math.floor(hash2(i, j, semente) * 4);
     if (t === T.PAREDE) {
-      const sul = IT(i, j + 1) !== T.PAREDE;
-      if (sul) { x.drawImage(gc(`pf${tema}${v % 3}`, () => paredeFrente(tema, v % 3)), px, py); if (hash2(i, j, 301 + semente) < 0.1 && i > 0) luzes.push({ x: px + 16, y: py + 12, r: 150, tipo: 'tocha' }); }
-      else { x.drawImage(gc(`pt${tema}${v % 3}`, () => paredeTopo(tema, v % 3)), px, py); const [, , , par2] = TEMAS[tema] || TEMAS.porao; x.fillStyle = rampa(par2).h; if (IT(i - 1, j) !== T.PAREDE) x.fillRect(px, py, 2, 32); if (IT(i + 1, j) !== T.PAREDE) x.fillRect(px + 30, py, 2, 32); if (IT(i, j - 1) !== T.PAREDE) x.fillRect(px, py, 32, 3); }
+      const sul = IT(i, j + 1) !== T.PAREDE; const RP = rampa((TEMAS[tema] || TEMAS.porao)[3]);
+      x.drawImage(gc(`pt${tema}${v % 3}`, () => paredeTopo(tema, v % 3)), px, py);
+      x.fillStyle = RP.h; if (IT(i - 1, j) !== T.PAREDE) x.fillRect(px, py, 2, 32); if (IT(i + 1, j) !== T.PAREDE) x.fillRect(px + 30, py, 2, 32); if (IT(i, j - 1) !== T.PAREDE) x.fillRect(px, py, 32, 3);
+      if (sul) { x.fillStyle = RP.h2; x.fillRect(px, py + 27, 32, 2); x.fillStyle = 'rgba(8,6,16,0.6)'; x.fillRect(px, py + 29, 32, 3); if (hash2(i, j, 301 + semente) < 0.1 && i > 0) { luzes.push({ x: px + 16, y: py + 26, r: 150, tipo: 'tocha' }); x.fillStyle = '#5a3a20'; x.fillRect(px + 13, py + 22, 6, 6); x.fillStyle = '#ffb030'; x.fillRect(px + 14, py + 23, 4, 4); x.fillStyle = '#fff2a0'; x.fillRect(px + 15, py + 24, 2, 2); } }
       continue;
     }
     x.drawImage(gc(`pi${tema}${v}`, () => pisoMas(tema, v)), px, py);

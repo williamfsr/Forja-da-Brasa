@@ -65,36 +65,49 @@ export async function confirmar(titulo, txt, sim = 'Sim', nao = 'Não') {
 }
 export const aviso = (titulo, txt, ok = 'OK') => popup(`<h2>${esc(titulo)}</h2><p>${txt}</p><button class="btn pri bloco" data-res="1">${esc(ok)}</button>`);
 
-// ---------- diálogos (caixa de texto estilo RPG, com retrato e opções) ----------
-let dlg = null;
+// ---------- diálogos: cena de RPG clássico (herói à esquerda, interlocutor à direita, caixa de texto e lista de opções com cursor) ----------
+let dlg = null, heroiRet = null, heroiNome = () => 'Você';
 export const dialogoAberto = () => !!dlg;
-function poeRetrato(ret) {
-  const box = $('#dialogo .dialogo-retrato'); box.innerHTML = ''; const cx = $('#dialogo .dialogo-caixa');
-  if (ret) { ret.className = 'ret'; box.append(ret); cx.classList.add('com-retrato'); } else cx.classList.remove('com-retrato');
+export const definirHeroiCena = (retFn, nomeFn) => { heroiRet = retFn; if (nomeFn) heroiNome = nomeFn; };
+function poeCena(ret) {
+  const H = $('#dialogo .cena-heroi'), N = $('#dialogo .cena-npc'), root = $('#dialogo'); H.innerHTML = ''; N.innerHTML = '';
+  if (!ret) { root.classList.remove('cena'); return; }
+  ret.className = 'ret'; N.append(ret); const hr = heroiRet && heroiRet(); if (hr) { hr.className = 'ret'; H.append(hr); } root.classList.add('cena');
 }
+function falante(q) { const root = $('#dialogo'); root.classList.toggle('f-heroi', q === 'heroi'); root.classList.toggle('f-npc', q !== 'heroi'); }
 export function dialogo(nome, linhas, opts = {}) {
   return new Promise((res) => {
-    dlg = { nome, linhas: linhas.slice(), i: 0, res, cheio: false, h: null }; poeRetrato(opts.retrato || null); $('#dialogo .dialogo-opcoes').innerHTML = '';
-    $('#dialogo').classList.remove('oculto'); $('.dialogo-nome').textContent = nome; $('.dialogo-seta').style.display = ''; mostrarLinha();
+    dlg = { nome, linhas: linhas.slice(), i: 0, res, cheio: false, h: null }; poeCena(opts.retrato || null); $('#dialogo .dialogo-opcoes').innerHTML = '';
+    $('#dialogo').classList.remove('oculto', 'com-opcoes'); $('.dialogo-seta').style.display = ''; mostrarLinha();
     $('#dialogo').onclick = (e) => { if (e.target.closest('.dialogo-opcoes')) return; dialogoAvancar(); };
   });
 }
-// Mostra um texto e opções clicáveis; devolve o id da opção escolhida.
+// Mostra um texto e as opções (só de fala); devolve o id da escolhida. Setas/W-S navegam, Enter confirma; toque escolhe direto.
 export function dialogoEscolha({ nome, retrato = null, texto, opcoes }) {
   return new Promise((res) => {
-    dlg = { nome, linhas: [texto], i: 0, res, cheio: false, h: null, escolha: true }; poeRetrato(retrato); $('#dialogo').classList.remove('oculto'); $('.dialogo-nome').textContent = nome; $('.dialogo-seta').style.display = 'none';
+    dlg = { nome, linhas: [texto], i: 0, res, cheio: false, h: null, escolha: true, cur: Math.max(0, opcoes.findIndex((o) => !o.off)), ops: opcoes }; poeCena(retrato); $('#dialogo').classList.remove('oculto'); $('#dialogo').classList.add('com-opcoes'); $('.dialogo-seta').style.display = 'none';
     const box = $('#dialogo .dialogo-opcoes'); box.innerHTML = '';
-    opcoes.forEach((o) => { const b = document.createElement('button'); b.disabled = !!o.off; b.innerHTML = `<span>${esc(o.rot)}</span>${o.sub ? `<small>${esc(o.sub)}</small>` : ''}`; b.addEventListener('click', (e) => { e.stopPropagation(); if (!dlg) return; clearInterval(dlg.h); Au.sfx('select'); fecharDialogo(); res(o.id); }); box.append(b); });
-    $('#dialogo').onclick = () => dialogoAvancar(); mostrarLinha();
+    opcoes.forEach((o, n) => { const b = document.createElement('button'); b.className = 'op' + (o.off ? ' off' : ''); b.disabled = !!o.off; b.innerHTML = `<i class="cur">▶</i><span class="op-t">${esc(o.rot)}${o.tom ? ` <em>${esc(o.tom)}</em>` : ''}</span>${o.sub ? `<small>${esc(o.sub)}</small>` : ''}`; b.addEventListener('pointerenter', () => { dlg && (dlg.cur = n, marcaCursor()); }); b.addEventListener('click', (e) => { e.stopPropagation(); escolher(n); }); box.append(b); });
+    marcaCursor(); $('#dialogo').onclick = () => dialogoAvancar(); mostrarLinha(); falante('npc');
   });
 }
-function fecharDialogo() { dlg = null; $('#dialogo').classList.add('oculto'); $('#dialogo').onclick = null; $('#dialogo .dialogo-opcoes').innerHTML = ''; poeRetrato(null); }
+function marcaCursor() { if (!dlg || !dlg.ops) return; [...$('#dialogo .dialogo-opcoes').children].forEach((b, i) => b.classList.toggle('sel', i === dlg.cur)); }
+function escolher(n) { if (!dlg || !dlg.ops || !dlg.ops[n] || dlg.ops[n].off) return; const o = dlg.ops[n], r = dlg.res; clearInterval(dlg.h); Au.sfx('select'); fecharDialogo(); r(o.id); }
+export function dialogoNavegar(dir) { if (!dlg || !dlg.ops) return false; const n = dlg.ops.length; let c = dlg.cur; for (let k = 0; k < n; k++) { c = (c + (dir === 'baixo' ? 1 : -1) + n) % n; if (!dlg.ops[c].off) break; } dlg.cur = c; marcaCursor(); Au.sfx('select'); return true; }
+function fecharDialogo() { if (dlg) clearInterval(dlg.h); dlg = null; const r = $('#dialogo'); r.classList.add('oculto'); r.classList.remove('cena', 'com-opcoes', 'f-heroi'); r.onclick = null; $('#dialogo .dialogo-opcoes').innerHTML = ''; poeCena(null); }
 function mostrarLinha() {
-  const t = $('.dialogo-txt'); const txt = dlg.linhas[dlg.i]; let n = 0; dlg.cheio = false; t.textContent = ''; clearInterval(dlg.h);
-  dlg.h = setInterval(() => { n += 2; t.textContent = txt.slice(0, n); if (n % 4 === 0) Au.sfx('select'); if (n >= txt.length) { clearInterval(dlg.h); dlg.cheio = true; t.textContent = txt; } }, 22);
+  const d = dlg; if (!d) return;
+  const t = $('.dialogo-txt'); let txt = d.linhas[d.i]; let q = 'npc'; if (txt.startsWith('» ')) { q = 'heroi'; txt = txt.slice(2); } else if (txt.startsWith('* ')) { q = 'narra'; txt = txt.slice(2); }
+  d.txtAtual = txt; $('.dialogo-nome').textContent = q === 'heroi' ? heroiNome() : q === 'narra' ? '' : d.nome; $('.dialogo-nome').style.display = q === 'narra' ? 'none' : ''; t.classList.toggle('narra', q === 'narra'); falante(q);
+  let n = 0; d.cheio = false; t.textContent = ''; clearInterval(d.h);
+  d.h = setInterval(() => {
+    if (dlg !== d) { clearInterval(d.h); return; }          // diálogo fechado/trocado enquanto digitava
+    n += 2; t.textContent = txt.slice(0, n); if (n % 4 === 0) Au.sfx('select');
+    if (n >= txt.length) { clearInterval(d.h); d.cheio = true; t.textContent = txt; }
+  }, 22);
 }
 export function dialogoAvancar() {
-  if (!dlg) return; if (!dlg.cheio) { clearInterval(dlg.h); $('.dialogo-txt').textContent = dlg.linhas[dlg.i]; dlg.cheio = true; return; }
-  if (dlg.escolha) return;
+  if (!dlg) return; if (!dlg.cheio) { clearInterval(dlg.h); $('.dialogo-txt').textContent = dlg.txtAtual; dlg.cheio = true; return; }
+  if (dlg.escolha) { escolher(dlg.cur); return; }
   dlg.i++; if (dlg.i >= dlg.linhas.length) { const r = dlg.res; fecharDialogo(); r(); return; } Au.sfx('select'); mostrarLinha();
 }

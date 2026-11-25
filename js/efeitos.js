@@ -1,4 +1,4 @@
-// Animações de combate: folhas de sprite (webp) derivadas do pacote JB2A (CC BY-NC-SA 4.0, https://www.jb2a.com — ver CREDITOS.md).
+// Animações de combate: folhas de sprite (webp) derivadas do pacote JB2A (CC BY-NC-SA 4.0, https://www.jb2a.com — ver LICENSE).
 // Cada folha tem n quadros em grade; "ponto" toca sobre um tile/alvo, "feixe" vai do conjurador ao alvo (esticado e girado), "golpe" é um corte sobre o alvo.
 import { FX } from './dados/fx_dados.js';
 const IMG = {};
@@ -45,3 +45,23 @@ export function desenhar(ctx, f, cam, TS) {
   }
   ctx.restore();
 }
+
+// ---- receita de animação por magia: classifica as 283 magias por elemento (palavras do id/nome + tipo de dano) ----
+const KW = [
+  [/fogo|fire|flam|burn|ardente|chama|meteor|incend|hellish|solar|sol_|sun/, 'fogo'], [/gelo|ice|frost|cold|frio|freez|glaci|sleet|snow|cone_frio/, 'gelo'],
+  [/relamp|lightning|shock|choque|bolt|raio_/, 'raio'], [/trov|thunder|shatter|gust|earthquake|terremoto|quake/, 'trovao'],
+  [/radiant|sagrad|holy|divine|bless|bencao|smite|castigo|guid|spirit|sacred|dawn|beacon|heroism|aid|favor|word_of_rad/, 'radiante'],
+  [/necro|vampir|chill|death|morte|dedo|bestow|curse|bane|fear|medo|undead|harm|eyebite|wither|animate_dead|vampiric/, 'necrotico'],
+  [/veneno|poison|acid|acido|stink|nevoa|plague|contagion|cloud|web|grease/, 'veneno'],
+  [/heal|cura|cure|regener|restor|revive|resurrect|raise|prayer|mending|false_life|lesser|greater_rest/, 'cura'],
+  [/shield|armor|armadura|protect|aegis|ward|sanctuary|stoneskin|barrier|mirror|blur|invisib|forcecage|wall_of_force|resilient/, 'escudo'],
+];
+export function elemDe(id, sp, dano) {
+  const k = String(id || '').toLowerCase(); if (sp && sp.tipo === 'cura') return 'cura';
+  const d = PONTO_DE[dano || (sp && sp.dano)]; if (d && d !== 'forca' && sp && ['atq', 'salva', 'auto'].includes(sp.tipo)) return d;
+  for (const [re, e] of KW) if (re.test(k)) return e;
+  if (d) return d; return sp && sp.tipo === 'buff' ? 'escudo' : 'forca';
+}
+export const feixeDoElem = (el) => ({ fogo: 'feixe_fogo', gelo: 'feixe_gelo', raio: 'feixe_raio', trovao: 'feixe_raio', radiante: 'feixe_sagrado', necrotico: 'feixe_arcano', veneno: 'feixe_calor', cura: 'feixe_sagrado', escudo: 'feixe_sagrado', forca: 'feixe_arcano' }[el] || 'feixe_arcano');
+export const impactoDoElem = (el, grande) => (el === 'fogo' && grande ? 'bola_fogo' : el === 'escudo' ? 'escudo' : el);
+export const castDe = (conj, el, sp) => { const c = conj && conj.cls; if (sp && sp.tipo === 'cura') return 'cura_azul'; if (c === 'clerigo' || c === 'paladino') return 'radiante'; if (c === 'druida' || c === 'patrulheiro') return 'cura_azul'; if (c === 'bardo') return 'castigo'; return el === 'gelo' ? 'gelo' : 'forca'; };

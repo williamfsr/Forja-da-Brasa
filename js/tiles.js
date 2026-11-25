@@ -1,0 +1,4 @@
+// Terrenos e objetos sólidos (compartilhado por mapas e motor).
+export const MOBILIA_SOLIDA = ['cama', 'mesa', 'cadeira', 'banco', 'estante', 'altar', 'lareira', 'fogao', 'balcao', 'espelho', 'planta', 'vaso', 'caldeirao', 'bancada', 'mapa', 'livro', 'estatua', 'pilar', 'armas', 'fornalha', 'toneis', 'saco', 'fonte', 'trono', 'cripta', 'alcapao', 'colchao', 'tela'];
+export const SOLIDOS = new Set(['arvore', 'pinheiro', 'montanha', 'agua', 'lava', 'rocha', 'telhado', 'telhadoAz', 'telhadoVd', 'telhadoCz', 'telhadoMr', 'telhadoRx', 'telhadoPr', 'telhadoOc', 'parede', 'paredeLisa', 'cerca', 'braseiro', 'poco', 'barril', 'bigorna', 'tenda', 'placa', 'caverna', 'cavernaLiv', 'casinha', 'saida', 'muro', 'torreT', 'paredeI', 'paredeP', 'janela', 'bauF', 'arvoreMorta', ...MOBILIA_SOLIDA]);
+export function solidoEm(m, x, y) { if (x < 0 || y < 0 || x >= m.w || y >= m.h) return true; return SOLIDOS.has(m.g[y * m.w + x]); }
